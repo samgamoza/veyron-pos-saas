@@ -16,6 +16,12 @@ This codebase is now prepared for internet deployment with:
 - owner alert tracking for low stock, voids/refunds, and suspicious inventory adjustments
 - SMTP email alert hooks controlled from owner settings
 
+## PostgreSQL (Flask) and Prisma
+
+- **This Python app** uses Postgres when `DATABASE_URL` is set to a non-`sqlite` DSN (see [`app/core/db.py`](app/core/db.py): `DATABASE_ENGINE` becomes `postgres`, connections use `psycopg`).
+- **Prisma is not part of this repository** — there is no `package.json`, `schema.prisma`, or `prisma/` folder here. If Prisma lives in another app or monorepo package, point its datasource at the **same** `DATABASE_URL` and database/schema as Flask so POS, eTown, and Prisma share one Postgres database.
+- Schema migrations today are driven by Flask `init_db()` / `ensure_column`, not Prisma Migrate. If you introduce Prisma, avoid conflicting migrations (e.g. treat SQLAlchemy/raw SQL as source of truth, or use `prisma db pull` against the existing DB and align carefully).
+
 ## Current Limits
 
 - PostgreSQL support is now wired into the app, but you should still validate your production database and seed data before going live.

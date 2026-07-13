@@ -1,0 +1,3 @@
+// Original eTown MVP draft (2026-04-10) — kept for reference.
+// The active schema is schema.prisma, aligned with Flask init_db column names.
+// Key drift vs Flask: product_variants used stock_qty (Flask: stock); orders shape differed.

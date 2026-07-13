@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketplace orders — {{ business_name }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    <style>:root{--accent:{{ brand_primary }};}</style>
+    <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
+</head>
+<body class="admin-body">
+<div class="page-wrap">
+    <header class="site-header">
+        <div class="header-brand">
+            <img src="{{ url_for('static', filename=logo_path) }}" alt="" class="brand-logo">
+            <div>
+                <p class="eyebrow">Marketplace</p>
+                <h1 class="h4 mb-0">eTown orders</h1>
+                <p class="text-muted small mb-0">Read-only — online customer orders (not POS sales).</p>
+            </div>
+        </div>
+        <nav class="header-nav">
+            <a href="{{ url_for('admin_dashboard') }}" class="ghost-link">Admin</a>
+            <a href="{{ url_for('pos') }}" class="ghost-link">POS</a>
+            <a href="{{ url_for('logout') }}" class="ghost-link">Logout</a>
+        </nav>
+    </header>
+    <main class="container py-4">
+        {% if orders %}
+            {% for o in orders %}
+            <article class="card mb-3 shadow-sm">
+                <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+                    <strong>Order #{{ o.id }}</strong>
+                    <span class="badge bg-secondary">{{ o.status }}</span>
+                    <span class="small text-muted">{{ o.created_at }}</span>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>{{ o.guest_name }}</strong> · {{ o.guest_phone }}</p>
+                    <p class="small text-muted mb-2">{{ o.delivery_line1 }}{% if o.delivery_city %} · {{ o.delivery_city }}{% endif %}</p>
+                    {% if o.notes %}<p class="small mb-2"><em>Customer note:</em> {{ o.notes }}</p>{% endif %}
+                    {% if o.delivery_notes %}<p class="small mb-2"><em>Delivery:</em> {{ o.delivery_notes }}</p>{% endif %}
+                    <table class="table table-sm mb-2">
+                        <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Line</th></tr></thead>
+                        <tbody>
+                        {% for line in items_by_order.get(o.id, []) %}
+                            <tr>
+                                <td>{{ line.product_name }}{% if line.variant_name %} ({{ line.variant_name }}){% endif %}</td>
+                                <td class="text-end">{{ line.quantity }}</td>
+                                <td class="text-end">₱{{ '%.2f'|format(line.line_total) }}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="3" class="text-muted">No line items</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    <p class="mb-0 small">Subtotal ₱{{ '%.2f'|format(o.subtotal) }} · Tax ₱{{ '%.2f'|format(o.tax) }} · <strong>Total ₱{{ '%.2f'|format(o.total) }}</strong></p>
+                </div>
+            </article>
+            {% endfor %}
+        {% else %}
+            <p class="text-muted">No marketplace orders yet.</p>
+        {% endif %}
+    </main>
+</div>
+</body>
+</html>

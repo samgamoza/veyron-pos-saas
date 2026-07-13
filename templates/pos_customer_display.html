@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ store_display_name }} — Your order</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <style>
+        :root {
+            --cd-bg: #0f172a;
+            --cd-fg: #f8fafc;
+            --cd-muted: #94a3b8;
+            --cd-accent: #38bdf8;
+        }
+        html, body {
+            min-height: 100%;
+            margin: 0;
+            background: var(--cd-bg);
+            color: var(--cd-fg);
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+        .cd-wrap {
+            max-width: 56rem;
+            margin: 0 auto;
+            padding: clamp(1rem, 3vw, 2.5rem);
+        }
+        .cd-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .cd-header img {
+            height: clamp(40px, 8vw, 56px);
+            width: auto;
+            object-fit: contain;
+        }
+        .cd-title {
+            font-size: clamp(1.25rem, 4vw, 2rem);
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.02em;
+        }
+        .cd-sub {
+            font-size: clamp(0.8rem, 2vw, 0.95rem);
+            color: var(--cd-muted);
+            margin: 0.25rem 0 0;
+        }
+        .cd-table-wrap {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        table.cd-table {
+            width: 100%;
+            margin: 0;
+            font-size: clamp(0.95rem, 2.5vw, 1.25rem);
+        }
+        table.cd-table thead th {
+            background: rgba(30, 41, 59, 0.95);
+            color: var(--cd-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 0.72em;
+            padding: 0.85rem 1rem;
+            border: 0;
+        }
+        table.cd-table tbody td {
+            padding: 0.9rem 1rem;
+            border-color: rgba(148, 163, 184, 0.15);
+            vertical-align: middle;
+        }
+        table.cd-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+        .cd-qty {
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .cd-totals {
+            margin-top: 1.5rem;
+            font-size: clamp(1rem, 2.8vw, 1.35rem);
+        }
+        .cd-totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.35rem 0;
+            color: var(--cd-muted);
+        }
+        .cd-totals-row.cd-grand {
+            margin-top: 0.75rem;
+            padding-top: 1rem;
+            border-top: 2px solid var(--cd-accent);
+            font-size: clamp(1.2rem, 3.5vw, 1.85rem);
+            font-weight: 800;
+            color: var(--cd-fg);
+        }
+        .cd-empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--cd-muted);
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+        }
+        .cd-foot {
+            margin-top: 2rem;
+            font-size: 0.75rem;
+            color: var(--cd-muted);
+            opacity: 0.85;
+            line-height: 1.4;
+        }
+    </style>
+    <script>document.documentElement.dataset.theme = 'dark';</script>
+</head>
+<body>
+<div class="cd-wrap">
+    <header class="cd-header">
+        <img src="{{ url_for('static', filename=logo_path) }}" alt="">
+        <div>
+            <h1 class="cd-title">{{ store_display_name }}</h1>
+            <p class="cd-sub">Your order</p>
+        </div>
+    </header>
+
+    <div class="cd-table-wrap">
+        <table class="table table-dark table-striped cd-table mb-0">
+            <thead>
+                <tr>
+                    <th scope="col">Item</th>
+                    <th scope="col" class="text-end">Qty</th>
+                    <th scope="col" class="text-end">Each</th>
+                    <th scope="col" class="text-end">Line</th>
+                </tr>
+            </thead>
+            <tbody id="cd-lines">
+                <tr><td colspan="4" class="cd-empty" id="cd-placeholder">Waiting for cashier…</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="cd-totals" id="cd-totals" style="display:none;">
+        <div class="cd-totals-row"><span>Subtotal</span><span id="cd-subtotal">—</span></div>
+        <div class="cd-totals-row" id="cd-discount-row" style="display:none;"><span id="cd-discount-label">Discount</span><span id="cd-discount">—</span></div>
+        <div class="cd-totals-row"><span>VAT</span><span id="cd-vat">—</span></div>
+        <div class="cd-totals-row cd-grand"><span>Total due</span><span id="cd-total">—</span></div>
+    </div>
+
+    <p class="cd-foot">
+        This screen mirrors the active sale from the cashier POS in the same browser (second window / monitor).
+        Move this tab to the customer-facing display and keep the main POS on the cashier monitor.
+    </p>
+</div>
+<script>
+(function () {
+    const channelName = {{ pos_display_channel | tojson }};
+    const fmt = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+
+    const tbody = document.getElementById('cd-lines');
+    const totalsEl = document.getElementById('cd-totals');
+    const subtotalEl = document.getElementById('cd-subtotal');
+    const discountRow = document.getElementById('cd-discount-row');
+    const discountLabelEl = document.getElementById('cd-discount-label');
+    const discountEl = document.getElementById('cd-discount');
+    const vatEl = document.getElementById('cd-vat');
+    const totalEl = document.getElementById('cd-total');
+
+    function render(payload) {
+        if (!payload || !Array.isArray(payload.lines)) return;
+
+        if (payload.lines.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="cd-empty">No items in this order yet.</td></tr>';
+            totalsEl.style.display = 'none';
+            return;
+        }
+
+        tbody.innerHTML = payload.lines.map((line) => `
+            <tr>
+                <td>${escapeHtml(line.name)}</td>
+                <td class="text-end cd-qty">${line.quantity}</td>
+                <td class="text-end">${fmt.format(line.unitPrice)}</td>
+                <td class="text-end fw-semibold">${fmt.format(line.lineTotal)}</td>
+            </tr>
+        `).join('');
+
+        totalsEl.style.display = 'block';
+        subtotalEl.textContent = fmt.format(payload.subtotal || 0);
+        const disc = Number(payload.discountAmount || 0);
+        if (disc > 0.009) {
+            discountRow.style.display = 'flex';
+            discountLabelEl.textContent = (payload.discountLabel || 'Discount').replace(/</g, '');
+            discountEl.textContent = '−' + fmt.format(disc);
+        } else {
+            discountRow.style.display = 'none';
+        }
+        vatEl.textContent = fmt.format(payload.vat || 0);
+        totalEl.textContent = fmt.format(payload.total || 0);
+    }
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    if (typeof BroadcastChannel === 'undefined') {
+        tbody.innerHTML = '<tr><td colspan="4" class="cd-empty">This browser does not support dual-screen sync. Use a current Chrome or Edge.</td></tr>';
+        return;
+    }
+
+    const ch = new BroadcastChannel(channelName);
+    ch.onmessage = (ev) => {
+        if (!ev.data || ev.data.type !== 'ORDER') return;
+        render(ev.data.payload);
+    };
+    ch.postMessage({ type: 'REQUEST_SYNC' });
+    /* Cashier POS may load after this window; ask again briefly so the second monitor catches up. */
+    let pollN = 0;
+    const poll = setInterval(() => {
+        ch.postMessage({ type: 'REQUEST_SYNC' });
+        if (++pollN >= 8) {
+            clearInterval(poll);
+        }
+    }, 2000);
+})();
+</script>
+</body>
+</html>

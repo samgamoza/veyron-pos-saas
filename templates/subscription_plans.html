@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plans &amp; subscription</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+</head>
+<body class="admin-body">
+<main class="page-wrap" style="max-width: 64rem; margin: 0 auto; padding: 2rem 1rem 4rem;">
+    <header class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <p class="eyebrow">Subscription</p>
+            <h1 class="h2 mb-2">Choose your monthly package</h1>
+            <p class="text-muted mb-0">
+                Current workspace: <strong>{{ tenant.name }}</strong>
+                — plan <strong>{{ tenant.plan_name or '—' }}</strong>
+                ({{ tenant.subscription_status or '—' }})
+            </p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('owner_dashboard') }}" class="btn btn-outline-secondary">Owner dashboard</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">Admin</a>
+        </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <section class="flash-stack mb-4">
+                {% for category, message in messages %}
+                    <article class="flash-card {{ category }}">{{ message }}</article>
+                {% endfor %}
+            </section>
+        {% endif %}
+    {% endwith %}
+
+    <p class="small text-muted mb-4">
+        <strong>After you select a paid plan:</strong> demo product and monthly sales limits are removed, your subscription is marked active,
+        and the monthly fee shown below is stored for billing. Record payments the way you operate locally (bank, e-wallet, invoice) and align Owner settings with your chosen provider.
+    </p>
+
+    <div class="row g-3">
+        {% for plan in plans %}
+        <div class="col-md-6 col-lg-4">
+            <article class="dashboard-panel h-100 d-flex flex-column">
+                <h2 class="h5 text-capitalize">{{ plan.name }}</h2>
+                {% if plan.features_parsed.headline %}
+                <p class="text-muted small">{{ plan.features_parsed.headline }}</p>
+                {% endif %}
+                <p class="display-6 fw-semibold mb-3">
+                    {% if plan.price and plan.price > 0 %}
+                        {{ tenant.billing_currency or 'PHP' }} {{ plan.price | round | int }}<span class="fs-6 fw-normal text-muted">/mo</span>
+                    {% else %}
+                        <span class="fs-4">Free</span>
+                    {% endif %}
+                </p>
+                <ul class="small text-muted ps-3 mb-4 flex-grow-1">
+                    {% if plan.name|lower == 'demo' %}
+                    <li>Limited products &amp; sales per month</li>
+                    <li>Full UI to evaluate features</li>
+                    {% elif plan.name|lower == 'starter' %}
+                    <li>Single location POS &amp; inventory</li>
+                    <li>Owner reporting &amp; backups</li>
+                    {% elif plan.name|lower == 'growth' %}
+                    <li>Everything in Starter</li>
+                    <li>Stronger reporting &amp; team workflows</li>
+                    {% else %}
+                    <li>Multi-outlet &amp; priority support (roadmap-aligned)</li>
+                    <li>Enterprise integrations</li>
+                    {% endif %}
+                </ul>
+                {% if plan.name|lower == tenant.plan_name|lower %}
+                <button type="button" class="btn btn-secondary w-100" disabled>Current plan</button>
+                {% elif plan.name|lower == 'demo' %}
+                <button type="button" class="btn btn-outline-secondary w-100" disabled>Included with signup</button>
+                {% else %}
+                <form method="post" action="{{ url_for('subscription_select_plan') }}">
+                    <input type="hidden" name="plan_id" value="{{ plan.id }}">
+                    <button type="submit" class="btn btn-primary w-100">Select this plan</button>
+                </form>
+                {% endif %}
+            </article>
+        </div>
+        {% endfor %}
+    </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

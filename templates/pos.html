@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ business_name }} POS</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
     <style>:root{--accent:{{ brand_primary }};--accent-strong:{{ brand_primary }};--warning:{{ brand_accent }};}</style>
     <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
 </head>
@@ -14,7 +17,15 @@
         <div class="header-brand">
             <img src="{{ url_for('static', filename=logo_path) }}" alt="{{ business_name }} logo" class="brand-logo">
             <div>
-                <p class="eyebrow">POS</p>
+                <p class="eyebrow">POS
+                    {% if pos_profile_meta and pos_profile_meta.id == 'restaurant_table_service' %}
+                    <span class="badge rounded-pill text-bg-dark ms-2" style="font-size:.68rem;vertical-align:middle;font-weight:600;">Restaurant</span>
+                    {% elif pos_profile_meta and pos_profile_meta.id == 'retail_grocery' %}
+                    <span class="badge rounded-pill text-bg-secondary ms-2" style="font-size:.68rem;vertical-align:middle;font-weight:600;">Retail</span>
+                    {% elif pos_profile_meta and pos_profile_meta.id == 'cafe_bakery' %}
+                    <span class="badge rounded-pill text-bg-secondary ms-2" style="font-size:.68rem;vertical-align:middle;font-weight:600;">Café / QSR</span>
+                    {% endif %}
+                </p>
                 <h1>{{ business_name }}</h1>
             </div>
         </div>
@@ -28,10 +39,20 @@
             {% endif %}
             <span class="system-pill">{{ current_user.full_name }} · {{ current_user.role|title }}</span>
             <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+            <button type="button" class="ghost-link" id="open-customer-display-btn" title="Open customer-facing screen on second monitor">Customer screen</button>
             <a href="{{ url_for('logout') }}" class="ghost-link">Logout</a>
         </nav>
     </header>
     <main class="app-shell pos-shell">
+        {% if pos_profile_meta and pos_profile_meta.maturity in ('partial', 'roadmap') %}
+        <div class="alert alert-info border-0 mb-3 shadow-sm" role="status">
+            <strong class="d-block">{{ pos_profile_meta.label }}</strong>
+            <span class="small">{{ pos_profile_meta.veyron_today }}</span>
+            {% if pos_profile_meta.roadmap_hooks %}
+            <span class="d-block small text-muted mt-2"><strong>On the roadmap:</strong> {{ pos_profile_meta.roadmap_hooks }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
         <section class="hero-panel pos-stats-bar">
             <div class="pos-stat">
                 <span>Today's sales</span>
@@ -51,6 +72,38 @@
             </div>
         </section>
 
+        <section class="dashboard-chart-grid pos-kpi-grid">
+            <article class="chart-card">
+                <p class="eyebrow mb-1">Catalog overview</p>
+                <h3 class="mb-1"><span id="pos-total-products">0</span> sellable products</h3>
+                <p class="panel-note mb-0"><span id="pos-total-categories">0</span> categories available now</p>
+            </article>
+            <article class="chart-card">
+                <p class="eyebrow mb-1">Order snapshot</p>
+                <h3 class="mb-1"><span id="pos-items-in-cart">0</span> line item(s) in cart</h3>
+                <p class="panel-note mb-0">Qty total: <span id="pos-qty-in-cart">0</span></p>
+            </article>
+        </section>
+
+        <section class="chart-card mb-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <p class="eyebrow mb-1">Quick picks</p>
+                    <h3 class="mb-0">Fast add top-selling items</h3>
+                </div>
+                <small class="panel-note">Based on recent sales</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                {% for item in quick_picks %}
+                    <button type="button" class="btn btn-outline-primary quick-pick-btn" data-product-id="{{ item.id }}">
+                        {{ item.name }} · {{ item.price|php }}
+                    </button>
+                {% else %}
+                    <span class="panel-note">No sales history yet for quick picks.</span>
+                {% endfor %}
+            </div>
+        </section>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <section class="flash-stack">
@@ -61,7 +114,8 @@
             {% endif %}
         {% endwith %}
 
-        <form action="{{ url_for('checkout') }}" method="post" class="cashier-form" data-vat-rate="{{ vat_rate }}">
+        <form action="{{ url_for('checkout') }}" method="post" class="cashier-form" data-vat-rate="{{ vat_rate }}" data-display-channel="{{ pos_display_channel }}" data-store-name="{{ store_display_name|e }}">
+            <input type="hidden" name="idempotency_key" value="">
             <section class="workspace-grid cashier-grid">
                 <section class="catalog-panel cashier-stage">
                     <div class="section-heading">
@@ -90,6 +144,18 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="pos-product-search" class="form-label mb-1">Search or counter scan</label>
+                        <input
+                            type="search"
+                            id="pos-product-search"
+                            class="form-control"
+                            placeholder="Type name/SKU or use handheld scanner here — scan sends code + Enter adds line (like grocery checkout)"
+                            autocomplete="off"
+                            inputmode="search"
+                        >
+                    </div>
+
                     <nav class="category-tabs" id="category-tabs">
                         <button type="button" class="category-tab active" data-category="all">All</button>
                         {% for category in product_categories %}
@@ -102,7 +168,7 @@
                             {% for product in category.products %}
                                 {% set product_variants = variants_map.get(product.id, []) %}
                                 {% set img_url = get_product_image_url(product.image_path, product.category_name) %}
-                                <article class="product-card cashier-product-card {% if product.status == 'out_of_stock' %}out-of-stock-status{% elif product.stock == 0 and not product_variants %}sold-out{% elif product.stock <= product.reorder_level and not product_variants %}low-stock{% endif %}" data-category="{{ product.category_name }}">
+                                <article class="product-card cashier-product-card {% if product.status == 'out_of_stock' %}out-of-stock-status{% elif product.stock == 0 and not product_variants %}sold-out{% elif product.stock <= product.reorder_level and not product_variants %}low-stock{% endif %}" data-category="{{ product.category_name }}" data-base-sku="{{ product.sku }}">
                                     {% if product_variants %}
                                         <div class="product-card-image">
                                             <img src="{{ url_for('static', filename=img_url) }}" alt="{{ product.name }}" loading="lazy">
@@ -122,6 +188,7 @@
                                                         class="variant-tile"
                                                         data-product-id="{{ product.id }}"
                                                         data-variant-id="{{ variant.id }}"
+                                                        data-effective-sku="{{ product.sku }}{{ variant.sku_suffix }}"
                                                         data-variant-name="{{ variant.name }}"
                                                         data-variant-price="{{ variant.price }}"
                                                         data-variant-stock="{{ variant.stock }}"
@@ -152,6 +219,7 @@
                                             type="button"
                                             class="product-tile"
                                             data-product-id="{{ product.id }}"
+                                            data-product-sku="{{ product.sku }}"
                                             data-product-name="{{ product.name }}"
                                             data-product-price="{{ product.price }}"
                                             data-product-stock="{{ product.stock }}"
@@ -203,6 +271,39 @@
                         </div>
                     </div>
 
+                    <section class="chart-card mb-3">
+                        <p class="eyebrow mb-1">Cash shift</p>
+                        {% if open_cash_shift %}
+                            <p class="mb-1"><strong>Open:</strong> {{ open_cash_shift.opened_at }}</p>
+                            <p class="mb-2"><strong>Opening cash:</strong> {{ open_cash_shift.opening_cash|php }}</p>
+                            <form method="post" action="{{ url_for('close_cash_shift') }}" class="d-grid gap-2">
+                                <input type="hidden" name="shift_id" value="{{ open_cash_shift.id }}">
+                                <input type="number" step="0.01" min="0" name="actual_cash" placeholder="Actual cash on hand" required>
+                                <input type="text" name="closing_note" placeholder="Closing note (optional)">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Close & reconcile shift</button>
+                            </form>
+                        {% else %}
+                            <p class="panel-note">No open shift. Open one before starting cash transactions.</p>
+                            <form method="post" action="{{ url_for('open_cash_shift') }}" class="d-grid gap-2">
+                                <input type="number" step="0.01" min="0" name="opening_cash" value="0" placeholder="Opening cash" required>
+                                <button type="submit" class="btn btn-outline-primary btn-sm">Open shift</button>
+                            </form>
+                        {% endif %}
+                        {% if recent_cash_shifts %}
+                            <details class="mt-2">
+                                <summary class="panel-note">Recent shifts</summary>
+                                <ul class="list-unstyled mb-0 mt-2">
+                                    {% for shift in recent_cash_shifts %}
+                                        <li class="small mb-1">
+                                            #{{ shift.id }} · {{ shift.status|title }} · {{ shift.opening_cash|php }}
+                                            {% if shift.variance is not none %} · Var {{ shift.variance|php }}{% endif %}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        {% endif %}
+                    </section>
+
                     <div class="cashier-cart">
                         <div class="cart-list" id="cart-list">
                             <p class="empty-cart-message">Tap a product tile to start the order.</p>
@@ -213,6 +314,18 @@
                             <div><span>VAT</span><strong id="vat-display">{{ 0|php }}</strong></div>
                             <div class="grand-total"><span>Total</span><strong id="total-display">{{ 0|php }}</strong></div>
                         </div>
+
+                        {% if pos_profile_meta and pos_profile_meta.id == 'restaurant_table_service' %}
+                        <section class="chart-card mb-3 border border-secondary-subtle" aria-label="Table or order reference">
+                            <p class="eyebrow mb-2">Dine-in</p>
+                            <label class="d-block mb-1">
+                                Table or order reference
+                                <input type="text" name="service_reference" maxlength="120" autocomplete="off"
+                                    placeholder="e.g. T-12, Guest name, Slip #">
+                            </label>
+                            <p class="panel-note mb-0 small">Printed on the receipt (kitchen display &amp; split bill are roadmap).</p>
+                        </section>
+                        {% endif %}
 
                         <label>
                             Payment method
@@ -244,6 +357,24 @@
                             <input type="text" name="discount_note" placeholder="Senior ID, PWD card, manager note">
                         </label>
 
+                        {% if settings.delivery_enabled == '1' %}
+                            <div class="delivery-settings-card chart-card mb-3">
+                                <p class="eyebrow mb-1">{{ _('delivery_label') }}</p>
+                                <label class="toggle-row">
+                                    <input type="checkbox" name="delivery_order" value="1">
+                                    <span>{{ _('delivery_order_label') }}</span>
+                                </label>
+                                <label>
+                                    {{ _('delivery_address_label') }}
+                                    <textarea name="delivery_address" rows="3" placeholder="House / building, street, barangay, city"></textarea>
+                                </label>
+                                <label>
+                                    {{ _('delivery_instructions_label') }}
+                                    <textarea name="delivery_instructions" rows="2" placeholder="Leave at guard, call customer, etc."></textarea>
+                                </label>
+                            </div>
+                        {% endif %}
+
                         <div class="cashier-actions">
                             <button type="button" class="ghost-link cash-action" id="clear-cart-button">Clear order</button>
                             <button type="submit" class="primary-button cash-action" id="checkout-button" disabled>Create receipt</button>
@@ -256,9 +387,71 @@
 </div>
 
     <script>
+        const categoryTabs = document.querySelectorAll('.category-tab');
+        const productCards = document.querySelectorAll('.cashier-product-card[data-category]');
+        const productSearchInput = document.getElementById('pos-product-search');
+        let activeCategory = 'all';
+
+        const normalize = (value) => (value || '').toLowerCase().trim();
+
+        function applyProductFilters() {
+            const query = normalize(productSearchInput ? productSearchInput.value : '');
+            productCards.forEach((card) => {
+                const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
+                const searchableText = normalize(card.textContent);
+                const queryMatch = !query || searchableText.includes(query);
+                card.style.display = (categoryMatch && queryMatch) ? '' : 'none';
+            });
+        }
+
+        categoryTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                categoryTabs.forEach((t) => t.classList.remove('active'));
+                tab.classList.add('active');
+                activeCategory = tab.dataset.category;
+                applyProductFilters();
+            });
+        });
+
+        if (productSearchInput) {
+            productSearchInput.addEventListener('input', applyProductFilters);
+        }
+
         const cashierForm = document.querySelector('.cashier-form');
 
         if (cashierForm) {
+            let cartBroadcastChannel = null;
+            const getCartBroadcast = () => {
+                if (typeof BroadcastChannel === 'undefined') {
+                    return null;
+                }
+                if (!cartBroadcastChannel) {
+                    try {
+                        cartBroadcastChannel = new BroadcastChannel(cashierForm.dataset.displayChannel || 'veyron_pos_dual_default');
+                        cartBroadcastChannel.onmessage = (ev) => {
+                            if (ev.data && ev.data.type === 'REQUEST_SYNC') {
+                                renderCart();
+                            }
+                        };
+                    } catch (err) {
+                        cartBroadcastChannel = null;
+                    }
+                }
+                return cartBroadcastChannel;
+            };
+
+            const publishCartToCustomerDisplay = (payload) => {
+                const ch = getCartBroadcast();
+                if (!ch) {
+                    return;
+                }
+                try {
+                    ch.postMessage({ type: 'ORDER', payload });
+                } catch (err) {
+                    /* ignore */
+                }
+            };
+
             const vatRate = Number(cashierForm.dataset.vatRate || 0);
             const formatter = new Intl.NumberFormat('en-PH', {
                 style: 'currency',
@@ -279,6 +472,15 @@
             const clearCartButton = document.getElementById('clear-cart-button');
             const discountTypeSelect = document.getElementById('discount-type-select');
             const customDiscountRateInput = document.getElementById('custom-discount-rate');
+            const quickPickButtons = Array.from(document.querySelectorAll('.quick-pick-btn'));
+            const totalProductsEl = document.getElementById('pos-total-products');
+            const totalCategoriesEl = document.getElementById('pos-total-categories');
+            const cartItemsEl = document.getElementById('pos-items-in-cart');
+            const cartQtyEl = document.getElementById('pos-qty-in-cart');
+
+            const categorySet = new Set(Array.from(document.querySelectorAll('.cashier-product-card[data-category]')).map((el) => el.dataset.category));
+            if (totalProductsEl) totalProductsEl.textContent = String(quantityInputs.length);
+            if (totalCategoriesEl) totalCategoriesEl.textContent = String(categorySet.size);
 
             const catalog = new Map(
                 productTiles.map((tile) => [tile.dataset.productId, {
@@ -331,6 +533,19 @@
                 renderCart();
             };
 
+            const addOneForProduct = (productId) => {
+                const baseInput = getQuantityInput(productId, null);
+                if (baseInput) {
+                    setQuantity(productId, null, Number(baseInput.value || 0) + 1);
+                    return;
+                }
+                const firstVariantTile = variantTiles.find((tile) => tile.dataset.productId === String(productId) && !tile.disabled);
+                if (firstVariantTile) {
+                    const variantInput = getQuantityInput(productId, firstVariantTile.dataset.variantId);
+                    setQuantity(productId, firstVariantTile.dataset.variantId, Number(variantInput.value || 0) + 1);
+                }
+            };
+
             const renderCart = () => {
                 const lines = quantityInputs
                     .map((input) => {
@@ -365,6 +580,7 @@
                     .filter(Boolean);
 
                 const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+                const totalQty = lines.reduce((sum, line) => sum + line.quantity, 0);
                 const discountType = discountTypeSelect.value;
                 const presetDiscounts = { none: 0, senior: 0.20, pwd: 0.20 };
                 const discountRate = discountType === 'custom'
@@ -375,10 +591,43 @@
                 const vat = discountedSubtotal * vatRate;
                 const total = discountedSubtotal + vat;
 
+                const discountLabel =
+                    discountType === 'none'
+                        ? ''
+                        : discountType === 'custom'
+                          ? 'Custom discount'
+                          : discountType === 'senior'
+                            ? 'Senior discount'
+                            : discountType === 'pwd'
+                              ? 'PWD discount'
+                              : 'Discount';
+
+                const customerPayload = {
+                    storeName: cashierForm.dataset.storeName || '',
+                    lines: lines.map((line) => ({
+                        name: line.name,
+                        quantity: line.quantity,
+                        unitPrice: line.price,
+                        lineTotal: line.lineTotal,
+                    })),
+                    subtotal,
+                    discountType,
+                    discountLabel,
+                    discountAmount,
+                    discountedSubtotal,
+                    vat,
+                    total,
+                    totalQty,
+                    lineCount: lines.length,
+                };
+                publishCartToCustomerDisplay(customerPayload);
+
                 subtotalDisplay.textContent = formatter.format(subtotal);
                 vatDisplay.textContent = `${formatter.format(vat)}${discountAmount > 0 ? ` after ${formatter.format(discountAmount)} discount` : ''}`;
                 totalDisplay.textContent = formatter.format(total);
                 checkoutButton.disabled = lines.length === 0;
+                if (cartItemsEl) cartItemsEl.textContent = String(lines.length);
+                if (cartQtyEl) cartQtyEl.textContent = String(totalQty);
 
                 if (lines.length === 0) {
                     cartList.innerHTML = '<p class="empty-cart-message">Tap a product tile to start the order.</p>';
@@ -415,6 +664,44 @@
                 });
             });
 
+            const variantCards = Array.from(cashierForm.querySelectorAll('.cashier-product-card')).filter((card) =>
+                Boolean(card.querySelector('.variant-list'))
+            );
+            variantCards.forEach((card) => {
+                const variantList = card.querySelector('.variant-list');
+                const productId = variantList ? variantList.dataset.productId : null;
+                if (!variantList || !productId) return;
+
+                const activateFromCard = () => {
+                    const availableVariants = variantTiles.filter((tile) =>
+                        tile.dataset.productId === String(productId) && !tile.disabled
+                    );
+                    if (availableVariants.length === 1) {
+                        const tile = availableVariants[0];
+                        const quantityInput = getQuantityInput(productId, tile.dataset.variantId);
+                        setQuantity(productId, tile.dataset.variantId, Number(quantityInput.value || 0) + 1);
+                        return;
+                    }
+                    if (availableVariants.length > 1) {
+                        // Multiple variants available: nudge cashier to pick exact variant.
+                        variantList.style.outline = '2px solid var(--accent, #2453d4)';
+                        variantList.style.outlineOffset = '4px';
+                        setTimeout(() => {
+                            variantList.style.outline = '';
+                            variantList.style.outlineOffset = '';
+                        }, 900);
+                        availableVariants[0].focus();
+                        return;
+                    }
+                    alert('This product has no available variants right now.');
+                };
+
+                const cardImage = card.querySelector('.product-card-image');
+                const cardInfo = card.querySelector('.product-card-info');
+                if (cardImage) cardImage.addEventListener('click', activateFromCard);
+                if (cardInfo) cardInfo.addEventListener('click', activateFromCard);
+            });
+
             cashierForm.addEventListener('click', (event) => {
                 const control = event.target.closest('[data-action][data-product-id]');
                 if (!control) {
@@ -446,21 +733,198 @@
 
             customDiscountRateInput.addEventListener('input', renderCart);
 
+            quickPickButtons.forEach((button) => {
+                button.addEventListener('click', () => addOneForProduct(button.dataset.productId));
+            });
+
+            const cardIsVisible = (card) => card && card.style.display !== 'none';
+
+            const skuMatches = (a, b) => {
+                if (a === b) return true;
+                if (!a || !b) return false;
+                return String(a).toLowerCase().trim() === String(b).toLowerCase().trim();
+            };
+
+            const scrollMatchIntoView = (node) => {
+                const card = node && node.closest ? node.closest('.cashier-product-card') : null;
+                if (card && card.scrollIntoView) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            };
+
+            const resetCategoryToAll = () => {
+                activeCategory = 'all';
+                categoryTabs.forEach((t) => t.classList.toggle('active', t.dataset.category === 'all'));
+            };
+
+            const pulseVariantList = (variantList) => {
+                variantList.style.outline = '2px solid var(--accent, #2453d4)';
+                variantList.style.outlineOffset = '4px';
+                setTimeout(() => {
+                    variantList.style.outline = '';
+                    variantList.style.outlineOffset = '';
+                }, 900);
+            };
+
+            const flashScanMiss = () => {
+                if (!productSearchInput) return;
+                productSearchInput.classList.add('is-invalid');
+                setTimeout(() => productSearchInput.classList.remove('is-invalid'), 450);
+            };
+
+            /**
+             * Counter scanner path: resolve SKU / PLU across the whole catalog (ignores category tab
+             * and search filter) so handheld wedges behave like grocery lane POS.
+             */
+            const tryAddFromBarcodeSearch = () => {
+                if (!productSearchInput) return false;
+                const raw = (productSearchInput.value || '').trim();
+                if (!raw) return false;
+
+                const variantGlobal = variantTiles.find((tile) => !tile.disabled && skuMatches(tile.dataset.effectiveSku || '', raw));
+                if (variantGlobal) {
+                    const q = getQuantityInput(variantGlobal.dataset.productId, variantGlobal.dataset.variantId);
+                    setQuantity(
+                        variantGlobal.dataset.productId,
+                        variantGlobal.dataset.variantId,
+                        Number(q && q.value ? q.value : 0) + 1,
+                    );
+                    scrollMatchIntoView(variantGlobal);
+                    return true;
+                }
+
+                const productGlobal = productTiles.find((tile) => !tile.disabled && skuMatches(tile.dataset.productSku || '', raw));
+                if (productGlobal) {
+                    addOneForProduct(productGlobal.dataset.productId);
+                    scrollMatchIntoView(productGlobal);
+                    return true;
+                }
+
+                const baseCards = Array.from(document.querySelectorAll('.cashier-product-card[data-base-sku]')).filter((card) =>
+                    skuMatches(card.dataset.baseSku || '', raw),
+                );
+                if (baseCards.length === 1) {
+                    const card = baseCards[0];
+                    const variantList = card.querySelector('.variant-list');
+                    if (variantList) {
+                        const productId = variantList.dataset.productId;
+                        const avail = variantTiles.filter((t) => t.dataset.productId === String(productId) && !t.disabled);
+                        if (avail.length === 1) {
+                            const tile = avail[0];
+                            const q = getQuantityInput(productId, tile.dataset.variantId);
+                            setQuantity(productId, tile.dataset.variantId, Number(q && q.value ? q.value : 0) + 1);
+                            scrollMatchIntoView(tile);
+                            return true;
+                        }
+                        if (avail.length > 1) {
+                            resetCategoryToAll();
+                            applyProductFilters();
+                            pulseVariantList(variantList);
+                            scrollMatchIntoView(variantList);
+                            avail[0].focus();
+                            return false;
+                        }
+                    }
+                }
+
+                const visibleVariantTiles = variantTiles.filter((tile) => {
+                    const card = tile.closest('.cashier-product-card');
+                    return cardIsVisible(card) && !tile.disabled;
+                });
+                const variantHit = visibleVariantTiles.find((tile) => skuMatches(tile.dataset.effectiveSku || '', raw));
+                if (variantHit) {
+                    const q = getQuantityInput(variantHit.dataset.productId, variantHit.dataset.variantId);
+                    setQuantity(
+                        variantHit.dataset.productId,
+                        variantHit.dataset.variantId,
+                        Number(q && q.value ? q.value : 0) + 1,
+                    );
+                    scrollMatchIntoView(variantHit);
+                    return true;
+                }
+
+                const visibleProductTiles = productTiles.filter((tile) => {
+                    const card = tile.closest('.cashier-product-card');
+                    return cardIsVisible(card) && !tile.disabled;
+                });
+                const productHit = visibleProductTiles.find((tile) => skuMatches(tile.dataset.productSku || '', raw));
+                if (productHit) {
+                    addOneForProduct(productHit.dataset.productId);
+                    scrollMatchIntoView(productHit);
+                    return true;
+                }
+
+                const visibleCards = Array.from(productCards).filter(cardIsVisible);
+                if (visibleCards.length === 1) {
+                    const card = visibleCards[0];
+                    const variantList = card.querySelector('.variant-list');
+                    if (variantList) {
+                        const productId = variantList.dataset.productId;
+                        const avail = variantTiles.filter((t) => t.dataset.productId === String(productId) && !t.disabled);
+                        if (avail.length === 1) {
+                            const tile = avail[0];
+                            const q = getQuantityInput(productId, tile.dataset.variantId);
+                            setQuantity(productId, tile.dataset.variantId, Number(q && q.value ? q.value : 0) + 1);
+                            scrollMatchIntoView(tile);
+                            return true;
+                        }
+                        if (avail.length > 1) {
+                            pulseVariantList(variantList);
+                            avail[0].focus();
+                            scrollMatchIntoView(variantList);
+                        }
+                        return false;
+                    }
+                    const tile = card.querySelector('.product-tile:not([disabled])');
+                    if (tile) {
+                        addOneForProduct(tile.dataset.productId);
+                        scrollMatchIntoView(tile);
+                        return true;
+                    }
+                }
+
+                return false;
+            };
+
+            if (productSearchInput) {
+                productSearchInput.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter') {
+                        return;
+                    }
+                    event.preventDefault();
+                    const hadQuery = Boolean((productSearchInput.value || '').trim());
+                    if (tryAddFromBarcodeSearch()) {
+                        productSearchInput.value = '';
+                        resetCategoryToAll();
+                        applyProductFilters();
+                    } else if (hadQuery) {
+                        flashScanMiss();
+                    }
+                });
+            }
+
+            getCartBroadcast();
             renderCart();
+
+            document.getElementById('open-customer-display-btn')?.addEventListener('click', () => {
+                window.open("{{ url_for('pos_customer_display') }}", "VeyronCustomerDisplay", "noopener,noreferrer");
+            });
         }
 
-        const categoryTabs = document.querySelectorAll('.category-tab');
-        const productCards = document.querySelectorAll('.cashier-product-card[data-category]');
-
-        categoryTabs.forEach((tab) => {
-            tab.addEventListener('click', () => {
-                categoryTabs.forEach((t) => t.classList.remove('active'));
-                tab.classList.add('active');
-                const selected = tab.dataset.category;
-                productCards.forEach((card) => {
-                    card.style.display = (selected === 'all' || card.dataset.category === selected) ? '' : 'none';
-                });
-            });
+        document.addEventListener('keydown', (event) => {
+            const isMeta = event.ctrlKey || event.metaKey;
+            if (isMeta && event.key.toLowerCase() === 'k' && productSearchInput) {
+                event.preventDefault();
+                productSearchInput.focus();
+                productSearchInput.select();
+            }
+            if (isMeta && event.key === 'Enter') {
+                const checkoutButton = document.getElementById('checkout-button');
+                if (checkoutButton && !checkoutButton.disabled) {
+                    event.preventDefault();
+                    checkoutButton.click();
+                }
+            }
         });
     </script>
     <script>
@@ -476,5 +940,6 @@
         document.querySelectorAll('.theme-toggle').forEach(b=>b.textContent=t==='dark'?'\u2600\uFE0F':'\uD83C\uDF19');
     })();
     </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

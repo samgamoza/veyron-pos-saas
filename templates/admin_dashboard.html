@@ -4,8 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ business_name }} Admin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>:root{--accent:{{ brand_primary }};--accent-strong:{{ brand_primary }};--warning:{{ brand_accent }};}</style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root{--accent:{{ brand_primary }};--accent-strong:{{ brand_primary }};--warning:{{ brand_accent }};}
+        .tenant-dashboard-hero{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,transparent),color-mix(in srgb,var(--warning) 8%,transparent));border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}
+        .tenant-dashboard-hero h2{font-size:1.15rem;margin:0 0 .35rem;}
+        .tenant-pills{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;}
+        .tenant-pill{font-size:.78rem;padding:.25rem .65rem;border-radius:999px;background:#fff;border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent-strong);}
+        [data-theme="dark"] .tenant-pill{background:#1e293b;border-color:#334155;color:#e2e8f0;}
+    </style>
     <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
 </head>
 <body class="admin-body">
@@ -16,6 +27,7 @@
             <div>
                 <p class="eyebrow">Admin</p>
                 <h1>{{ business_name }}</h1>
+                <p class="text-muted small mb-0">Catalog, users, and store snapshot — same sidebar pattern as the platform console.</p>
             </div>
         </div>
         <nav class="header-nav">
@@ -23,6 +35,7 @@
                 <a href="{{ url_for('owner_dashboard') }}" class="ghost-link">Owner</a>
             {% endif %}
             <a href="{{ url_for('inventory_dashboard') }}" class="ghost-link">Inventory</a>
+            <a href="{{ url_for('admin_marketplace_orders') }}" class="ghost-link">eTown orders</a>
             <a href="{{ url_for('pos') }}" class="pos-launch-link ghost-link">POS</a>
             <span class="system-pill">{{ current_user.full_name }}</span>
             <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
@@ -32,12 +45,13 @@
     <main class="dashboard-shell has-sidebar">
         <aside class="dashboard-sidebar">
             <nav class="admin-nav">
-                <button type="button" class="collapsible admin-nav-link active" data-target="products">Products</button>
-                <button type="button" class="collapsible admin-nav-link" data-target="categories">Categories</button>
-                <button type="button" class="collapsible admin-nav-link" data-target="brands">Brands</button>
-                <button type="button" class="collapsible admin-nav-link" data-target="units">Units</button>
-                <button type="button" class="collapsible admin-nav-link" data-target="users">Users</button>
-                <button type="button" class="collapsible admin-nav-link" data-target="audit">Audit</button>
+                <button type="button" class="collapsible admin-nav-link active" data-target="overview"><i class="bi bi-grid-1x2 me-2"></i>Overview</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="products"><i class="bi bi-box-seam me-2"></i>Products</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="categories"><i class="bi bi-grid me-2"></i>Categories</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="brands"><i class="bi bi-tags me-2"></i>Brands</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="units"><i class="bi bi-rulers me-2"></i>Units</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="users"><i class="bi bi-people me-2"></i>Users</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="audit"><i class="bi bi-journal-text me-2"></i>Audit</button>
             </nav>
         </aside>
 
@@ -51,6 +65,17 @@
                     </section>
                 {% endif %}
             {% endwith %}
+
+            <section class="dashboard-panel" id="overview" data-admin-section>
+                <div class="tenant-dashboard-hero">
+                    <h2>Store snapshot</h2>
+                    <p class="text-muted small mb-0">Key metrics, sales trend, and day-end controls. Use the sidebar to manage catalog, lookups, and users.</p>
+                    <div class="tenant-pills">
+                        <span class="tenant-pill">Products &amp; variants</span>
+                        <span class="tenant-pill">Categories &amp; brands</span>
+                        <span class="tenant-pill">Cash &amp; inventory day</span>
+                    </div>
+                </div>
 
             <div class="metrics-grid">
                 <article class="metric-card">
@@ -71,7 +96,96 @@
                 </article>
             </div>
 
-            <section class="dashboard-panel" id="products" data-admin-section>
+            <section class="dashboard-chart-grid" id="overview-charts">
+                <article class="chart-card">
+                    <p class="eyebrow mb-1">Revenue trend</p>
+                    <canvas id="adminSalesTrendChart" height="120"></canvas>
+                </article>
+                <article class="chart-card">
+                    <p class="eyebrow mb-1">Top products</p>
+                    <canvas id="adminTopProductsChart" height="120"></canvas>
+                </article>
+            </section>
+
+            <section class="dashboard-panel split admin-ops-panel">
+                <article>
+                    <p class="eyebrow">Cash reconciliation</p>
+                    <h2>X / Z Read (Today)</h2>
+                    <div class="table-shell compact-table admin-table-wrap" style="margin-top: 1rem;">
+                        <table class="table">
+                            <tbody>
+                                <tr><th>Receipts</th><td>{{ cash_reads.x_read.receipt_count }}</td></tr>
+                                <tr><th>Gross Sales</th><td>{{ cash_reads.x_read.gross_sales|php }}</td></tr>
+                                <tr><th>Discounts</th><td>{{ cash_reads.x_read.discounts|php }}</td></tr>
+                                <tr><th>Net Sales</th><td>{{ cash_reads.x_read.net_sales|php }}</td></tr>
+                                <tr><th>Cash / Card / Wallet</th><td>{{ cash_reads.x_read.cash_sales|php }} / {{ cash_reads.x_read.card_sales|php }} / {{ cash_reads.x_read.wallet_sales|php }}</td></tr>
+                                <tr><th>Z Variance</th><td>{{ cash_reads.z_read.variance|php }}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+                <article>
+                    <p class="eyebrow">Inventory day controls</p>
+                    <h2>Open / Close Inventory Day</h2>
+                    {% if today_shift is none %}
+                        <p class="panel-note">No inventory day open yet.</p>
+                        <form method="POST" action="{{ url_for('open_inventory_day') }}" class="d-grid gap-2">
+                            <input type="number" min="0" name="opening_units" placeholder="Opening count from cashier" required>
+                            <button type="submit" class="primary-button">Open Day</button>
+                        </form>
+                    {% elif today_shift.status == 'open' %}
+                        <p class="panel-note">Opened at {{ today_shift.opened_at }}. You can close once counts are done.</p>
+                        <form method="POST" action="{{ url_for('close_inventory_day') }}" class="d-grid gap-2">
+                            <input type="hidden" name="shift_id" value="{{ today_shift.id }}">
+                            <input type="number" min="0" name="manual_closing_units" placeholder="Manual closing count" required>
+                            <input type="number" min="0" name="damaged_units" placeholder="Damaged units" value="0" required>
+                            <input type="number" min="0" name="wastage_units" placeholder="Wastage units" value="0" required>
+                            <input type="text" name="closing_notes" placeholder="Closing notes (optional)">
+                            <button type="submit" class="primary-button">Close Day</button>
+                        </form>
+                    {% else %}
+                        <p class="panel-note">Day already closed: {{ today_shift.closed_at }}</p>
+                    {% endif %}
+                    <hr>
+                    <p class="eyebrow">Danger zone</p>
+                    <p class="panel-note">Use only for hard resets. This sets all product and variant stocks to zero.</p>
+                    <form method="POST" action="{{ url_for('reset_inventory_stock') }}" onsubmit="return confirm('Reset all product and variant stock quantities to zero? This cannot be undone automatically.');">
+                        <button type="submit" class="btn btn-outline-danger w-100">Reset All Stock to Zero</button>
+                    </form>
+                </article>
+            </section>
+
+            <section class="dashboard-panel split admin-ops-panel">
+                <article>
+                    <p class="eyebrow">Recent sales</p>
+                    <h2>Latest receipts</h2>
+                    <div class="table-shell compact-table admin-table-wrap" style="margin-top: 1rem;">
+                        <table>
+                            <thead><tr><th>Receipt</th><th>Time</th><th>Payment</th><th>Status</th><th>Total</th></tr></thead>
+                            <tbody>
+                                {% for sale in metrics.recent_sales %}
+                                    <tr><td>#{{ sale.id }}</td><td>{{ sale.created_at }}</td><td>{{ sale.payment_method }}</td><td><span class="status-chip {{ sale.status }}">{{ sale.status|title }}</span></td><td>{{ sale.total|php }}</td></tr>
+                                {% else %}
+                                    <tr><td colspan="5">No sales recorded yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="stock-summary">
+                    <p class="eyebrow">Menu mix</p>
+                    <h2>{{ metrics.units_in_stock }} units on hand</h2>
+                    <p>{{ metrics.item_count }} products tracked across {{ metrics.category_mix|length }} categories.</p>
+                    <div class="mix-list">
+                        {% for category in metrics.category_mix %}
+                            <div><span>{{ category.name }}</span><strong>{{ category.product_count }}</strong></div>
+                        {% endfor %}
+                    </div>
+                </article>
+            </section>
+            </section>
+
+            <section class="dashboard-panel" id="products" data-admin-section hidden>
                 <div class="section-heading">
                     <div>
                         <p class="eyebrow">Products</p>
@@ -397,6 +511,12 @@
                             <option value="admin">Admin</option>
                             <option value="owner">Owner</option>
                         </select>
+                        <select name="language_override">
+                            <option value="">Tenant default</option>
+                            {% for locale in supported_locales %}
+                                <option value="{{ locale }}">{{ locale|upper }}</option>
+                            {% endfor %}
+                        </select>
                         <input type="password" name="pin" placeholder="PIN" required>
                         <button class="primary-button" type="submit">Add User</button>
                     </form>
@@ -405,61 +525,80 @@
                 {% endif %}
                 <div class="table-shell admin-table-wrap compact-table">
                     <table class="table">
-                        <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last Login</th></tr></thead>
+                        <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Language</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
                         <tbody>
                             {% for user in users %}
-                                <tr><td>{{ user.full_name }}</td><td>{{ user.username }}</td><td><span class="status-chip">{{ user.role|title }}</span></td><td>{{ 'Active' if user.is_active else 'Inactive' }}</td><td>{{ user.last_login or 'Never' }}</td></tr>
+                                <tr>
+                                    <td>{{ user.full_name }}</td>
+                                    <td>{{ user.username }}</td>
+                                    <td><span class="status-chip">{{ user.role|title }}</span></td>
+                                    <td>{{ user.language_override or 'Tenant default' }}</td>
+                                    <td>{{ 'Active' if user.is_active else 'Inactive' }}</td>
+                                    <td>{{ user.last_login or 'Never' }}</td>
+                                    <td>
+                                        <button type="button" class="ghost-link small-action edit-user-button"
+                                            data-user-id="{{ user.id }}"
+                                            data-full-name="{{ user.full_name }}"
+                                            data-username="{{ user.username }}"
+                                            data-role="{{ user.role }}"
+                                            data-language-override="{{ user.language_override or '' }}"
+                                            data-is-active="{{ user.is_active }}">Edit</button>
+                                        {% if user.is_active %}
+                                            <form method="POST" action="{{ url_for('deactivate_user') }}" class="inline-form danger-form">
+                                                <input type="hidden" name="user_id" value="{{ user.id }}">
+                                                <button type="submit" class="ghost-link small-action danger-action">Deactivate</button>
+                                            </form>
+                                        {% else %}
+                                            <form method="POST" action="{{ url_for('reactivate_user') }}" class="inline-form">
+                                                <input type="hidden" name="user_id" value="{{ user.id }}">
+                                                <button type="submit" class="ghost-link small-action">Reactivate</button>
+                                            </form>
+                                        {% endif %}
+                                        <button type="button" class="ghost-link small-action reset-pin-button" data-user-id="{{ user.id }}">Reset PIN</button>
+                                    </td>
+                                </tr>
                             {% else %}
-                                <tr><td colspan="5">No users available.</td></tr>
+                                <tr><td colspan="6">No users available.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-            </section>
 
-            <section class="dashboard-panel admin-section-card" id="audit" data-admin-section hidden>
-                <div class="section-heading"><div><p class="eyebrow">Audit</p><h2>Recent activity trail</h2></div></div>
-                <div class="table-shell compact-table admin-table-wrap">
-                    <table class="table">
-                        <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
-                        <tbody>
-                            {% for log in audit_logs %}
-                                <tr><td>{{ log.created_at }}</td><td>{{ log.actor_name }} · {{ log.actor_role|title }}</td><td>{{ log.action|replace('_', ' ')|title }}</td><td>{{ log.entity_type|replace('_', ' ')|title }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}</td><td>{{ log.details }}</td></tr>
-                            {% else %}
-                                <tr><td colspan="5">No audit entries yet.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section class="dashboard-panel split admin-ops-panel">
-                <article>
-                    <p class="eyebrow">Recent sales</p>
-                    <h2>Latest receipts</h2>
-                    <div class="table-shell compact-table admin-table-wrap" style="margin-top: 1rem;">
-                        <table>
-                            <thead><tr><th>Receipt</th><th>Time</th><th>Payment</th><th>Status</th><th>Total</th></tr></thead>
-                            <tbody>
-                                {% for sale in metrics.recent_sales %}
-                                    <tr><td>#{{ sale.id }}</td><td>{{ sale.created_at }}</td><td>{{ sale.payment_method }}</td><td><span class="status-chip {{ sale.status }}">{{ sale.status|title }}</span></td><td>{{ sale.total|php }}</td></tr>
-                                {% else %}
-                                    <tr><td colspan="5">No sales recorded yet.</td></tr>
+                <div id="edit-user-modal" class="modal" style="display:none;">
+                    <div class="modal-content">
+                        <span class="close-modal" onclick="document.getElementById('edit-user-modal').style.display='none'">&times;</span>
+                        <h3>Edit User</h3>
+                        <form method="POST" action="{{ url_for('edit_user') }}" class="admin-form-grid">
+                            <input type="hidden" name="user_id" id="edit-user-id">
+                            <input type="text" name="full_name" id="edit-full-name" placeholder="Full Name" required>
+                            <input type="text" name="username" id="edit-username" placeholder="Username" required>
+                            <select name="role" id="edit-role" required>
+                                <option value="cashier">Cashier</option>
+                                <option value="admin">Admin</option>
+                                <option value="owner">Owner</option>
+                            </select>
+                            <select name="language_override" id="edit-language-override">
+                                <option value="">Tenant default</option>
+                                {% for locale in supported_locales %}
+                                    <option value="{{ locale }}">{{ locale|upper }}</option>
                                 {% endfor %}
-                            </tbody>
-                        </table>
+                            </select>
+                            <button class="primary-button admin-submit" type="submit">Save Changes</button>
+                        </form>
                     </div>
-                </article>
-                <article class="stock-summary">
-                    <p class="eyebrow">Menu mix</p>
-                    <h2>{{ metrics.units_in_stock }} units on hand</h2>
-                    <p>{{ metrics.item_count }} products tracked across {{ metrics.category_mix|length }} categories.</p>
-                    <div class="mix-list">
-                        {% for category in metrics.category_mix %}
-                            <div><span>{{ category.name }}</span><strong>{{ category.product_count }}</strong></div>
-                        {% endfor %}
+                </div>
+
+                <div id="reset-pin-modal" class="modal" style="display:none;">
+                    <div class="modal-content">
+                        <span class="close-modal" onclick="document.getElementById('reset-pin-modal').style.display='none'">&times;</span>
+                        <h3>Reset User PIN</h3>
+                        <form method="POST" action="{{ url_for('reset_user_pin') }}" class="admin-form-grid">
+                            <input type="hidden" name="user_id" id="reset-pin-user-id">
+                            <input type="password" name="new_pin" placeholder="New PIN" required>
+                            <button class="primary-button admin-submit" type="submit">Reset PIN</button>
+                        </form>
                     </div>
-                </article>
+                </div>
             </section>
         </section>
     </main>
@@ -493,6 +632,62 @@
             }
         }
 
+        let adminChartsDone = false;
+
+        function renderAdminCharts() {
+            if (adminChartsDone) return;
+            const overview = document.getElementById('overview');
+            if (!overview || overview.hidden) return;
+
+            const salesData = {{ metrics.sales_by_day|tojson }};
+            const topProducts = {{ metrics.top_products|tojson }};
+
+            const salesCanvas = document.getElementById('adminSalesTrendChart');
+            if (salesCanvas && Array.isArray(salesData)) {
+                const labels = salesData.map((row) => row.day).reverse();
+                const revenue = salesData.map((row) => row.revenue).reverse();
+                new Chart(salesCanvas.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Revenue',
+                            data: revenue,
+                            borderColor: '#2453d4',
+                            backgroundColor: 'rgba(36, 83, 212, 0.12)',
+                            fill: true,
+                            tension: 0.35,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                    },
+                });
+            }
+
+            const topCanvas = document.getElementById('adminTopProductsChart');
+            if (topCanvas && Array.isArray(topProducts)) {
+                new Chart(topCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: topProducts.map((row) => row.name),
+                        datasets: [{
+                            label: 'Sales',
+                            data: topProducts.map((row) => row.total),
+                            backgroundColor: '#00b3c7',
+                            borderRadius: 8,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                    },
+                });
+            }
+            adminChartsDone = true;
+        }
+
         function activateSection(targetId) {
             sections.forEach((section) => {
                 section.hidden = section.id !== targetId;
@@ -500,6 +695,12 @@
             navButtons.forEach((button) => {
                 button.classList.toggle('active', button.dataset.target === targetId);
             });
+            window.scrollTo(0, 0);
+            const shell = document.querySelector('.dashboard-shell');
+            if (shell) shell.scrollTop = 0;
+            if (targetId === 'overview') {
+                requestAnimationFrame(() => renderAdminCharts());
+            }
         }
 
         navButtons.forEach((button) => {
@@ -507,6 +708,18 @@
                 const targetId = button.dataset.target;
                 activateSection(targetId);
                 history.replaceState(null, '', `#${targetId}`);
+            });
+        });
+
+        const editUserButtons = document.querySelectorAll('.edit-user-button');
+        editUserButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                document.getElementById('edit-user-id').value = button.dataset.userId || '';
+                document.getElementById('edit-full-name').value = button.dataset.fullName || '';
+                document.getElementById('edit-username').value = button.dataset.username || '';
+                document.getElementById('edit-role').value = button.dataset.role || 'cashier';
+                document.getElementById('edit-language-override').value = button.dataset.languageOverride || '';
+                document.getElementById('edit-user-modal').style.display = 'block';
             });
         });
 
@@ -530,8 +743,8 @@
             });
         }
 
-        const hashTarget = window.location.hash ? window.location.hash.slice(1) : 'products';
-        const defaultTarget = document.getElementById(hashTarget) ? hashTarget : 'products';
+        const hashTarget = window.location.hash ? window.location.hash.slice(1) : 'overview';
+        const defaultTarget = document.getElementById(hashTarget) ? hashTarget : 'overview';
         activateSection(defaultTarget);
 
         const editVariantButtons = document.querySelectorAll('.edit-variant-button');
@@ -566,6 +779,7 @@
                 fillVariantEditorFromOption(selectedOption);
             });
         }
+
     </script>
     <script>
     function toggleTheme(){
@@ -580,5 +794,6 @@
         document.querySelectorAll('.theme-toggle').forEach(b=>b.textContent=t==='dark'?'\u2600\uFE0F':'\uD83C\uDF19');
     })();
     </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

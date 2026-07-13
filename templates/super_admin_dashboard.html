@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaaS Control Center — Super Admin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    <style>
+        :root{--accent:#2d3e50;--accent-strong:#1a232e;--warning:#b54a2f;}
+        .saas-hero{background:linear-gradient(135deg,rgba(45,62,80,.08),rgba(181,74,47,.06));border:1px solid rgba(45,62,80,.12);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}
+        .saas-hero h2{font-size:1.15rem;margin:0 0 .35rem;}
+        .saas-pills{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;}
+        .saas-pill{font-size:.78rem;padding:.25rem .65rem;border-radius:999px;background:#fff;border:1px solid rgba(45,62,80,.2);color:var(--accent-strong);}
+        [data-theme="dark"] .saas-pill{background:#1e293b;border-color:#334155;color:#e2e8f0;}
+        .module-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;margin-top:1rem;}
+        .module-card{border:1px solid rgba(45,62,80,.15);border-radius:10px;padding:1rem;background:rgba(255,255,255,.6);}
+        [data-theme="dark"] .module-card{background:#1e293b;border-color:#334155;}
+        .module-card h3{font-size:.95rem;margin:0 0 .35rem;}
+        .module-card p{font-size:.82rem;margin:0;opacity:.85;line-height:1.4;}
+        .quick-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem;align-items:center;}
+        .text-mono{font-family:ui-monospace,monospace;font-size:.8rem;}
+        .subdomain-cell code{font-size:.75rem;}
+        /* Super admin: full-viewport modal (avoid Bootstrap .modal clash + nested admin-form-grid bugs) */
+        .superadmin-modal-overlay{display:none;position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.5);align-items:flex-start;justify-content:center;padding:1.5rem 1rem;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+        .superadmin-modal-overlay.is-open{display:flex;}
+        .superadmin-modal-dialog{background:#fff;border-radius:14px;max-width:min(920px,100%);width:100%;max-height:calc(100vh - 2.5rem);display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,.28);position:relative;padding:0;margin:1rem auto 2rem;border:1px solid rgba(45,62,80,.12);}
+        [data-theme="dark"] .superadmin-modal-dialog{background:#1e293b;border-color:#334155;color:#e2e8f0;}
+        .superadmin-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid rgba(45,62,80,.12);flex-shrink:0;}
+        [data-theme="dark"] .superadmin-modal-head{border-color:#334155;}
+        .superadmin-modal-head h3{margin:0;font-size:1.1rem;}
+        .superadmin-modal-close{background:none;border:0;font-size:1.5rem;line-height:1;cursor:pointer;padding:.15rem .4rem;border-radius:8px;color:inherit;opacity:.75;}
+        .superadmin-modal-close:hover{opacity:1;background:rgba(45,62,80,.08);}
+        .superadmin-modal-body{padding:1.25rem 1.25rem 1.5rem;overflow-y:auto;flex:1;min-height:0;}
+        .edit-tenant-form{display:flex;flex-direction:column;gap:1.15rem;}
+        .edit-tenant-form fieldset{border:0;padding:0;margin:0;}
+        .edit-tenant-form legend{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--accent,#2d3e50);font-weight:600;margin:0 0 .5rem;}
+        [data-theme="dark"] .edit-tenant-form legend{color:#94a3b8;}
+        .edit-tenant-form .form-row-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem 1rem;align-items:end;}
+        .edit-tenant-form .form-row-grid label{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;color:#64748b;margin:0;}
+        [data-theme="dark"] .edit-tenant-form .form-row-grid label{color:#94a3b8;}
+        .edit-tenant-form input,.edit-tenant-form select,.edit-tenant-form textarea{width:100%;padding:.5rem .65rem;border-radius:10px;border:1px solid rgba(45,62,80,.2);font-size:.9rem;}
+        .edit-tenant-form input[type=checkbox]{width:auto;padding:0;margin:0;}
+        [data-theme="dark"] .edit-tenant-form input,[data-theme="dark"] .edit-tenant-form select,[data-theme="dark"] .edit-tenant-form textarea{background:#0f172a;border-color:#475569;color:#e2e8f0;}
+        .edit-tenant-form .checkbox-row{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;padding:.35rem 0;}
+        .edit-tenant-form .checkbox-row label{display:inline-flex;flex-direction:row;align-items:center;gap:.45rem;font-size:.88rem;color:inherit;cursor:pointer;margin:0;}
+        .edit-tenant-form .form-actions{margin-top:.25rem;padding-top:1rem;border-top:1px solid rgba(45,62,80,.1);}
+        [data-theme="dark"] .edit-tenant-form .form-actions{border-color:#334155;}
+        .edit-tenant-form .btn-save{width:100%;max-width:280px;padding:.65rem 1.25rem;border-radius:10px;border:0;font-weight:600;cursor:pointer;background:#2453d4;color:#fff;}
+        .edit-tenant-form .btn-save:hover{filter:brightness(1.05);}
+        .platform-settings-shell{max-width:52rem;}
+        .platform-settings-shell fieldset{border:1px solid rgba(45,62,80,.12);border-radius:12px;padding:1rem 1.1rem;margin:0 0 1rem;background:rgba(255,255,255,.35);}
+        [data-theme="dark"] .platform-settings-shell fieldset{background:#0f172a;border-color:#334155;}
+        .platform-settings-shell legend{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--accent,#2d3e50);padding:0 .35rem;}
+        [data-theme="dark"] .platform-settings-shell legend{color:#94a3b8;}
+        .platform-settings-shell label{display:flex;flex-direction:column;gap:.35rem;font-size:.82rem;margin:0;}
+        .platform-settings-shell .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.85rem 1rem;align-items:start;}
+        .platform-settings-shell input[type=text],.platform-settings-shell input[type=email],.platform-settings-shell input[type=url],.platform-settings-shell input[type=tel],.platform-settings-shell select,.platform-settings-shell textarea{padding:.5rem .65rem;border-radius:10px;border:1px solid rgba(45,62,80,.2);font-size:.9rem;width:100%;}
+        [data-theme="dark"] .platform-settings-shell input,[data-theme="dark"] .platform-settings-shell select,[data-theme="dark"] .platform-settings-shell textarea{background:#1e293b;border-color:#475569;color:#e2e8f0;}
+        .platform-settings-shell .checkbox-line{display:flex;align-items:flex-start;gap:.5rem;font-size:.88rem;cursor:pointer;}
+        .platform-settings-shell .checkbox-line input{margin-top:.2rem;}
+        .platform-settings-shell .hint{font-size:.78rem;opacity:.8;margin:.15rem 0 0;line-height:1.35;}
+        .platform-settings-shell details.roadmap{border:1px dashed rgba(45,62,80,.2);border-radius:10px;padding:.75rem 1rem;background:rgba(45,62,80,.03);}
+        [data-theme="dark"] .platform-settings-shell details.roadmap{border-color:#475569;background:rgba(15,23,42,.5);}
+    </style>
+    <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
+</head>
+<body class="admin-body">
+<div class="page-wrap">
+    <header class="site-header">
+        <div class="header-brand">
+            <img src="{{ url_for('static', filename=logo_path) }}" alt="Veyron POS logo" class="brand-logo">
+            <div>
+                <p class="eyebrow">Super Admin</p>
+                <h1>Multi-tenant SaaS control center</h1>
+                <p class="text-muted small mb-0">Tenants, subscriptions, billing, storefronts, delivery, and global catalog — one operational view.</p>
+            </div>
+        </div>
+        <nav class="header-nav">
+            <span class="system-pill">{{ current_user.full_name }}</span>
+            <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+            <a href="{{ url_for('logout') }}" class="ghost-link">Logout</a>
+        </nav>
+    </header>
+    <main class="dashboard-shell has-sidebar">
+        <aside class="dashboard-sidebar">
+            <nav class="admin-nav">
+                <button type="button" class="collapsible admin-nav-link active" data-target="overview"><i class="bi bi-grid-1x2 me-2"></i>Overview</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="tenants"><i class="bi bi-buildings me-2"></i>Tenants</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="operations"><i class="bi bi-lightning-charge me-2"></i>Subscriptions &amp; delivery</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="health"><i class="bi bi-heart-pulse me-2"></i>Health &amp; risk</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="compliance"><i class="bi bi-file-earmark-medical me-2"></i>Compliance &amp; BIR</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="organizations"><i class="bi bi-diagram-3 me-2"></i>Organizations</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="products"><i class="bi bi-box-seam me-2"></i>Products</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="billing"><i class="bi bi-receipt me-2"></i>Invoices</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="platform-admins"><i class="bi bi-shield-lock me-2"></i>Platform admins</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="settings"><i class="bi bi-sliders me-2"></i>Platform settings</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="audit"><i class="bi bi-shield-check me-2"></i>Audit</button>
+                <div class="mt-3 px-1 d-grid gap-2">
+                    <a href="{{ url_for('superadmin.payment_gateways') }}" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-wallet2 me-1"></i>Payment gateways</a>
+                    <a href="{{ url_for('superadmin.pos_profiles_reference') }}" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-shop-window me-1"></i>POS profiles</a>
+                    <a href="{{ url_for('product_admin.index') }}" class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-globe2 me-1"></i>Global product admin</a>
+                </div>
+            </nav>
+        </aside>
+        <section class="dashboard-content">
+            <section class="dashboard-panel" id="overview" data-admin-section>
+                <div class="metrics-grid">
+                    <article class="metric-card">
+                        <span>Total Tenants</span>
+                        <strong>{{ metrics.tenant_count }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Total Users</span>
+                        <strong>{{ metrics.user_count }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Active Locations</span>
+                        <strong>{{ metrics.active_location_count }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Active subscriptions</span>
+                        <strong>{{ metrics.active_subscriptions }}</strong>
+                    </article>
+                    <article class="metric-card warning">
+                        <span>Monthly recurring revenue</span>
+                        <strong>{{ metrics.monthly_recurring_revenue|php }}</strong>
+                    </article>
+                    <article class="metric-card warning">
+                        <span>Open risk signals</span>
+                        <strong>{{ metrics.pending_issues_count }}</strong>
+                        <span class="small text-muted d-block mt-1">Trials ending, overdue subs/invoices, stuck delivery</span>
+                    </article>
+                </div>
+                <div class="metrics-grid" style="margin-top:.75rem;">
+                    <article class="metric-card">
+                        <span>DB subscriptions (active / trial)</span>
+                        <strong>{{ saas_metrics.db_subscriptions }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Tenants — delivery on</span>
+                        <strong>{{ saas_metrics.tenants_delivery_on }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Tenants — storefront on</span>
+                        <strong>{{ saas_metrics.tenants_storefront_on }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Open delivery orders</span>
+                        <strong>{{ saas_metrics.delivery_orders_open }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Active riders</span>
+                        <strong>{{ saas_metrics.riders_active }}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Active plans (catalog)</span>
+                        <strong>{{ saas_metrics.active_plans }}</strong>
+                    </article>
+                </div>
+                <section class="dashboard-chart-grid">
+                    <article class="chart-card">
+                        <p class="eyebrow mb-1">Tenant status</p>
+                        <canvas id="tenantStatusChart" height="120"></canvas>
+                    </article>
+                    <article class="chart-card">
+                        <p class="eyebrow mb-1">Users by role</p>
+                        <canvas id="userRoleChart" height="120"></canvas>
+                    </article>
+                </section>
+                <div class="saas-hero">
+                    <h2>Platform snapshot</h2>
+                    <p class="mb-0 text-muted small">This console reflects the refactored stack: <code class="text-mono">app/core</code> (tenant, subscription, billing, payments, delivery), <code class="text-mono">app/modules</code> (API, products, storefront, users), and <code class="text-mono">app/admin</code> (super admin + global catalog).</p>
+                    <div class="saas-pills">
+                        <span class="saas-pill">Tenant isolation + scoped DB</span>
+                        <span class="saas-pill">REST API <span class="text-mono">/api/*</span></span>
+                        <span class="saas-pill">Plans &amp; subscriptions</span>
+                        <span class="saas-pill">Invoicing &amp; gateways</span>
+                        <span class="saas-pill">Auto storefront</span>
+                        <span class="saas-pill">In-house delivery</span>
+                        <span class="saas-pill">Audit &amp; RBAC</span>
+                    </div>
+                    <div class="quick-links">
+                        <a href="{{ url_for('product_admin.index') }}" class="btn btn-sm btn-primary">Global product catalog</a>
+                        <span class="text-muted small">API examples:</span>
+                        <code class="text-mono">/api/tenant</code>
+                        <code class="text-mono">/api/subscription</code>
+                        <code class="text-mono">/api/billing</code>
+                        <code class="text-mono">/api/delivery</code>
+                        <code class="text-mono">/api/store</code>
+                    </div>
+                </div>
+                <div class="section-heading mt-4">
+                    <div>
+                        <p class="eyebrow">Plans</p>
+                        <h2>Subscription catalog (database)</h2>
+                    </div>
+                </div>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>Plan</th><th>Price</th><th>Feature flags (JSON)</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {% for plan in plans_catalog %}
+                                <tr>
+                                    <td>{{ plan.name|title }}</td>
+                                    <td>{{ plan.price|php }}</td>
+                                    <td class="small text-muted">{% set pf = plan.features or '' %}{{ pf[:120] }}{% if pf|length > 120 %}…{% endif %}</td>
+                                    <td><span class="status-chip {{ 'active' if plan.is_active else 'inactive' }}">{{ 'Active' if plan.is_active else 'Off' }}</span></td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="4">No plans in <code>plans</code> table — run app init or seed.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="module-grid">
+                    <article class="module-card">
+                        <h3><i class="bi bi-diagram-3 me-1"></i> Multi-tenant core</h3>
+                        <p>Subdomain or <code class="text-mono">X-Tenant-ID</code> resolution, scoped connections, super-admin bypass where appropriate.</p>
+                    </article>
+                    <article class="module-card">
+                        <h3><i class="bi bi-credit-card me-1"></i> Billing &amp; payments</h3>
+                        <p>Invoices linked to subscriptions; payment gateways (e.g. PayPal) with per-tenant encrypted credentials.</p>
+                    </article>
+                    <article class="module-card">
+                        <h3><i class="bi bi-shop me-1"></i> Storefront</h3>
+                        <p>Per-tenant URL + theme; products surfaced from tenant-scoped catalog.</p>
+                    </article>
+                    <article class="module-card">
+                        <h3><i class="bi bi-truck me-1"></i> Delivery</h3>
+                        <p>Orders from POS when enabled; riders, assignment, tenant fee rules in settings.</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="dashboard-panel" id="tenants" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Tenants</p>
+                        <h2>Manage tenants</h2>
+                    </div>
+                </div>
+                <form method="POST" action="{{ url_for('superadmin.add_tenant') }}" class="admin-form-grid">
+                    <input type="text" name="tenant_name" placeholder="Tenant Name" required>
+                    <select name="plan_name">
+                        <option value="starter">Starter</option>
+                        <option value="growth">Growth</option>
+                        <option value="enterprise">Enterprise</option>
+                    </select>
+                    <select name="subscription_status">
+                        <option value="trial">Trial</option>
+                        <option value="active">Active</option>
+                        <option value="overdue">Overdue</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <select name="pos_profile" title="POS operating profile for this tenant">
+                        {% for o in pos_profile_options %}
+                        <option value="{{ o.id }}">{{ o.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="number" step="0.01" min="0" name="monthly_fee" placeholder="Monthly Fee (PHP)">
+                    <input type="email" name="contact_email" placeholder="Billing / Contact Email">
+                    <button class="primary-button admin-submit" type="submit">Add Tenant</button>
+                </form>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>ID</th><th>Name</th><th>Subdomain</th><th>POS profile</th><th>Plan</th><th>Subscription</th><th>MRR</th><th>Delivery</th><th>Storefront</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            {% for tenant in tenants %}
+                                <tr>
+                                    <td>{{ tenant.id }}</td>
+                                    <td>{{ tenant.name }}</td>
+                                    <td class="subdomain-cell">{% if tenant.subdomain %}<code>{{ tenant.subdomain }}</code>{% else %}—{% endif %}</td>
+                                    <td class="small" title="{{ tenant.pos_profile }}">{{ tenant.pos_profile_label }}</td>
+                                    <td>{{ tenant.plan_name|title }}</td>
+                                    <td><span class="status-chip">{{ tenant.subscription_status|title }}</span></td>
+                                    <td>{{ tenant.monthly_fee|php }}</td>
+                                    <td><span class="status-chip {{ 'active' if tenant.delivery_enabled else 'inactive' }}">{{ 'On' if tenant.delivery_enabled else 'Off' }}</span></td>
+                                    <td class="small">{% if tenant.storefront_url %}<a href="{{ tenant.storefront_url }}" target="_blank" rel="noopener">Open</a>{% elif tenant.subdomain %}<span class="text-muted">Auto URL</span>{% else %}—{% endif %}</td>
+                                    <td><span class="status-chip {{ 'active' if tenant.is_active else 'inactive' }}">{{ 'Active' if tenant.is_active else 'Inactive' }}</span></td>
+                                    <td>{{ tenant.created_at }}</td>
+                                    <td>
+                                        <button type="button" class="ghost-link small-action edit-tenant-button"
+                                            data-tenant-id="{{ tenant.id }}"
+                                            data-subdomain="{{ tenant.subdomain or '' }}"
+                                            data-tenant-name="{{ tenant.name }}"
+                                            data-tenant-status="{{ tenant.is_active }}"
+                                            data-plan-name="{{ tenant.plan_name }}"
+                                            data-subscription-status="{{ tenant.subscription_status }}"
+                                            data-monthly-fee="{{ tenant.monthly_fee }}"
+                                            data-contact-email="{{ tenant.contact_email }}"
+                                            data-language="{{ tenant.language }}"
+                                            data-billing-currency="{{ tenant.billing_currency }}"
+                                            data-billing-cycle="{{ tenant.billing_cycle }}"
+                                            data-next-billing-date="{{ tenant.next_billing_date or '' }}"
+                                            data-last-payment-date="{{ tenant.last_payment_date or '' }}"
+                                            data-payment-gateway="{{ tenant.payment_gateway }}"
+                                            data-payment-gateway-mode="{{ tenant.payment_gateway_mode }}"
+                                            data-delivery-enabled="{{ tenant.delivery_enabled }}"
+                                            data-delivery-provider="{{ tenant.delivery_provider }}"
+                                            data-delivery-api-key="{{ tenant.delivery_api_key }}"
+                                            data-delivery-callback-url="{{ tenant.delivery_callback_url }}"
+                                            data-storefront-enabled="{{ tenant.storefront_enabled }}"
+                                            data-auto-storefront-enabled="{{ tenant.auto_storefront_enabled }}"
+                                            data-storefront-url="{{ tenant.storefront_url }}"
+                                            data-parent-tenant-id="{{ tenant.parent_tenant_id or '' }}"
+                                            data-org-slug="{{ tenant.org_slug or '' }}"
+                                            data-outlet-code="{{ tenant.outlet_code or '' }}"
+                                            data-bir-tin="{{ tenant.bir_tin or '' }}"
+                                            data-bir-vat-registered="{{ tenant.bir_vat_registered }}"
+                                            data-compliance-notes="{{ (tenant.compliance_notes or '')|replace('\n',' ')|e }}"
+                                            data-ff-api="{{ tenant.ff_api }}"
+                                            data-ff-pos-advanced="{{ tenant.ff_pos_advanced }}"
+                                            data-ff-multi-branch="{{ tenant.ff_multi_branch }}"
+                                            data-ff-bir-exports="{{ tenant.ff_bir_exports }}"
+                                            data-pos-profile="{{ tenant.pos_profile }}">Edit</button>
+                                        <form method="POST" action="{{ url_for('superadmin.deactivate_tenant') }}" class="inline-form danger-form" style="display:inline;">
+                                            <input type="hidden" name="tenant_id" value="{{ tenant.id }}">
+                                            <button type="submit" class="ghost-link small-action danger-action">Deactivate</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('superadmin.reactivate_tenant') }}" class="inline-form" style="display:inline;">
+                                            <input type="hidden" name="tenant_id" value="{{ tenant.id }}">
+                                            <button type="submit" class="ghost-link small-action">Reactivate</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('superadmin.delete_tenant') }}" class="inline-form danger-form" style="display:inline;">
+                                            <input type="hidden" name="tenant_id" value="{{ tenant.id }}">
+                                            <button type="submit" class="ghost-link small-action danger-action">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="12">No tenants found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="dashboard-panel admin-section-card" id="operations" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Engine room</p>
+                        <h2>Subscriptions &amp; delivery (live data)</h2>
+                    </div>
+                </div>
+                <h3 class="h6 text-muted mt-2">Subscription rows (<code>subscriptions</code> + <code>plans</code>)</h3>
+                <div class="table-shell admin-table-wrap compact-table mb-4">
+                    <table class="table">
+                        <thead><tr><th>Tenant</th><th>Plan</th><th>Status</th><th>Trial ends</th><th>Started</th></tr></thead>
+                        <tbody>
+                            {% for sub in subscription_overview %}
+                                <tr>
+                                    <td>{{ sub.tenant_name }} <span class="text-muted small">#{{ sub.tenant_id }}</span></td>
+                                    <td>{{ sub.plan_name|title }} <span class="text-muted small">({{ sub.plan_price|php }})</span></td>
+                                    <td><span class="status-chip">{{ sub.status }}</span></td>
+                                    <td>{{ sub.trial_end or '—' }}</td>
+                                    <td>{{ sub.started_at }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="5">No subscription rows yet. Creating a tenant runs lifecycle hooks to start a trial when plans exist.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="h6 text-muted">Recent delivery orders (<code>delivery_orders</code>)</h3>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>ID</th><th>Tenant</th><th>Sale</th><th>Status</th><th>Fee</th><th>Address</th><th>Created</th></tr></thead>
+                        <tbody>
+                            {% for d in delivery_orders_recent %}
+                                <tr>
+                                    <td>{{ d.id }}</td>
+                                    <td>{{ d.tenant_name }}</td>
+                                    <td>#{{ d.order_id }}</td>
+                                    <td><span class="status-chip">{{ d.status }}</span></td>
+                                    <td>{{ d.delivery_fee|php }}</td>
+                                    <td class="small">{% set addr = d.address or '' %}{{ addr[:48] }}{% if addr|length > 48 %}…{% endif %}</td>
+                                    <td class="small">{{ d.created_at }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="7">No delivery orders yet. Enable delivery on a tenant and check out with delivery from POS.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="dashboard-panel admin-section-card" id="health" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Revenue &amp; operations</p>
+                        <h2>Tenant health &amp; risk</h2>
+                        <p class="text-muted small mb-0">Trials ending within 7 days, overdue invoices, subscription-overdue tenants, and delivery rows that need attention.</p>
+                    </div>
+                </div>
+                <h3 class="h6 text-muted mt-2">Trials ending soon</h3>
+                <div class="table-shell admin-table-wrap compact-table mb-4">
+                    <table class="table">
+                        <thead><tr><th>Tenant</th><th>Plan</th><th>Status</th><th>Trial ends</th></tr></thead>
+                        <tbody>
+                            {% for row in health_trials_ending %}
+                                <tr>
+                                    <td>{{ row.tenant_name }} <span class="text-muted small">#{{ row.tenant_id }}</span></td>
+                                    <td>{{ row.plan_name|title }}</td>
+                                    <td><span class="status-chip">{{ row.status }}</span></td>
+                                    <td>{{ row.trial_end }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="4">No subscriptions with trial end in the next 7 days.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="h6 text-muted">Overdue invoices</h3>
+                <div class="table-shell admin-table-wrap compact-table mb-4">
+                    <table class="table">
+                        <thead><tr><th>Invoice</th><th>Tenant</th><th>Total</th><th>Status</th><th>Due</th></tr></thead>
+                        <tbody>
+                            {% for row in health_overdue_invoices %}
+                                <tr>
+                                    <td>#{{ row.id }}</td>
+                                    <td>{{ row.tenant_name }}</td>
+                                    <td>{{ row.total_amount|php }} {{ row.billing_currency or 'PHP' }}</td>
+                                    <td><span class="status-chip inactive">{{ row.status|title }}</span></td>
+                                    <td>{{ row.due_at }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="5">No overdue invoices (unpaid with past due date).</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="h6 text-muted">Tenants — subscription overdue</h3>
+                <div class="table-shell admin-table-wrap compact-table mb-4">
+                    <table class="table">
+                        <thead><tr><th>Tenant</th><th>Fee</th><th>Contact</th></tr></thead>
+                        <tbody>
+                            {% for row in health_subscription_overdue %}
+                                <tr>
+                                    <td>{{ row.name }} <span class="text-muted small">#{{ row.id }}</span></td>
+                                    <td>{{ row.monthly_fee|php }} {{ row.billing_currency or 'PHP' }}</td>
+                                    <td class="small">{{ row.contact_email or '—' }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="3">No active tenants marked subscription overdue.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="h6 text-muted">Delivery — failures, cancellations, or stale pending</h3>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>ID</th><th>Tenant</th><th>Sale</th><th>Status</th><th>Created</th></tr></thead>
+                        <tbody>
+                            {% for row in health_delivery_attention %}
+                                <tr>
+                                    <td>{{ row.id }}</td>
+                                    <td>{{ row.tenant_name }}</td>
+                                    <td>#{{ row.order_id }}</td>
+                                    <td><span class="status-chip inactive">{{ row.status }}</span></td>
+                                    <td class="small">{{ row.created_at }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="5">No delivery exceptions in this view.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="dashboard-panel admin-section-card" id="compliance" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">BIR roadmap</p>
+                        <h2>Compliance metadata</h2>
+                        <p class="text-muted small mb-0">Per-tenant TIN, VAT flag, and notes. CSV export is a snapshot for reporting workflows; generation hooks can be wired later.</p>
+                    </div>
+                    <a href="{{ url_for('superadmin.compliance_export_csv') }}" class="btn btn-sm btn-outline-primary">Download compliance CSV</a>
+                </div>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>Tenant</th><th>TIN</th><th>VAT</th><th>Last report (placeholder)</th><th>Notes</th><th>Action</th></tr></thead>
+                        <tbody>
+                            {% for tenant in tenants %}
+                                <tr>
+                                    <td>{{ tenant.name }} <span class="text-muted small">#{{ tenant.id }}</span></td>
+                                    <td class="text-mono small">{{ tenant.bir_tin or '—' }}</td>
+                                    <td>{{ 'Yes' if tenant.bir_vat_registered else 'No' }}</td>
+                                    <td class="small">{{ tenant.bir_last_report_generated or '—' }}</td>
+                                    <td class="small">{% set n = tenant.compliance_notes or '' %}{{ n[:80] }}{% if n|length > 80 %}…{% endif %}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('superadmin.touch_bir_report') }}" class="inline-form" style="display:inline;">
+                                            <input type="hidden" name="tenant_id" value="{{ tenant.id }}">
+                                            <button type="submit" class="ghost-link small-action" title="Record timestamp for BIR reporting placeholder">Mark report</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="6">No tenants.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="dashboard-panel admin-section-card" id="organizations" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Multi-outlet</p>
+                        <h2>Organization rollups</h2>
+                        <p class="text-muted small mb-0">Grouped by <code class="text-mono">parent_tenant_id</code> (fallback: standalone tenant). GMV sums POS sales for the last 30 days across all outlets in the group.</p>
+                    </div>
+                </div>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>Org root ID</th><th>Name</th><th>Outlets</th><th>GMV (30d)</th></tr></thead>
+                        <tbody>
+                            {% for row in organization_rollups %}
+                                <tr>
+                                    <td>{{ row.org_root_id }}</td>
+                                    <td>{{ row.org_name }}</td>
+                                    <td>{{ row.outlet_count }}</td>
+                                    <td>{{ row.gmv_30d|php }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="4">No organizations.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="dashboard-panel admin-section-card" id="products" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Products</p>
+                        <h2>Tenant product catalog (read-through)</h2>
+                    </div>
+                    <a href="{{ url_for('product_admin.index') }}" class="btn btn-sm btn-outline-primary">Filters &amp; global view ↗</a>
+                </div>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>Tenant</th><th>Product</th><th>SKU</th><th>Price</th><th>Status</th><th>Storefront Sync</th></tr></thead>
+                        <tbody>
+                            {% for product in tenant_products %}
+                                <tr>
+                                    <td>{{ product.tenant_name }}</td>
+                                    <td>{{ product.name }}</td>
+                                    <td>{{ product.sku }}</td>
+                                    <td>{{ product.price|php }}</td>
+                                    <td><span class="status-chip {{ 'active' if product.status == 'active' else 'inactive' }}">{{ product.status|title }}</span></td>
+                                    <td><span class="status-chip {{ 'active' if product.auto_publish_products else 'inactive' }}">{{ 'Auto-posted' if product.auto_publish_products else 'Pending' }}</span></td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="6">No tenant products available yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <section class="dashboard-panel admin-section-card" id="billing" data-admin-section hidden>
+                <div class="section-heading"><div><p class="eyebrow">Billing</p><h2>Invoices (<code>invoices</code>)</h2></div></div>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>ID</th><th>Tenant</th><th>Amount</th><th>Total</th><th>Currency</th><th>Status</th><th>Issued</th><th>Due</th></tr></thead>
+                        <tbody>
+                            {% for invoice in billing_invoices %}
+                                <tr>
+                                    <td>#{{ invoice.id }}</td>
+                                    <td>{{ invoice.tenant_name }}</td>
+                                    <td>{{ invoice.amount|php }}</td>
+                                    <td>{{ invoice.total_amount|php }}</td>
+                                    <td>{{ invoice.billing_currency or 'PHP' }}</td>
+                                    <td><span class="status-chip {{ 'active' if invoice.status == 'paid' else 'inactive' }}">{{ invoice.status|title }}</span></td>
+                                    <td>{{ invoice.issued_at }}</td>
+                                    <td>{{ invoice.due_at or '—' }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="8">No invoices yet. Generate via billing API or subscription flows.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <section class="dashboard-panel admin-section-card" id="platform-admins" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Platform access</p>
+                        <h2>Super admin accounts</h2>
+                        <p class="text-muted small mb-0">Tenant staff (owner, admin, cashier) are managed in each tenant&rsquo;s admin. This list is only for <code class="text-mono">super_admin</code> operators.</p>
+                    </div>
+                </div>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>ID</th><th>Name</th><th>Username</th><th>Last login</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            {% for user in platform_admin_users %}
+                                <tr>
+                                    <td>{{ user.id }}</td>
+                                    <td>{{ user.full_name }}</td>
+                                    <td>{{ user.username }}</td>
+                                    <td class="small">{{ user.last_login or '—' }}</td>
+                                    <td><span class="status-chip {{ 'active' if user.is_active else 'inactive' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span></td>
+                                    <td>
+                                        {% if user.is_active and user.id != current_user.id %}
+                                        <form method="POST" action="{{ url_for('superadmin.deactivate_platform_user') }}" class="inline-form danger-form" style="display:inline;">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <button type="submit" class="ghost-link small-action danger-action">Deactivate</button>
+                                        </form>
+                                        {% elif not user.is_active %}
+                                        <form method="POST" action="{{ url_for('superadmin.reactivate_platform_user') }}" class="inline-form" style="display:inline;">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <button type="submit" class="ghost-link small-action">Reactivate</button>
+                                        </form>
+                                        {% else %}
+                                        <span class="text-muted small">—</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="6">No platform admin accounts. Seed or create a user with role <code>super_admin</code>.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <section class="dashboard-panel admin-section-card" id="settings" data-admin-section hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">SaaS</p>
+                        <h2>Platform settings</h2>
+                        <p class="text-muted small mb-0">Defaults for new sessions, public signup, maintenance, and support branding. Tenant-level language still overrides for logged-in staff when set.</p>
+                    </div>
+                </div>
+                <div class="platform-settings-shell">
+                <form method="POST" action="{{ url_for('superadmin.save_saas_settings') }}">
+                    <fieldset>
+                        <legend>Brand &amp; support</legend>
+                        <div class="settings-grid">
+                            <label>Platform / legal name
+                                <input type="text" name="company_name" value="{{ settings.company_name }}" placeholder="Acme POS Platform" autocomplete="organization">
+                            </label>
+                            <label>Support email
+                                <input type="email" name="support_email" value="{{ settings.support_email }}" placeholder="support@example.com" autocomplete="email">
+                            </label>
+                            <label>Support phone <span class="hint">Shown in footers, emails, and help links (optional).</span>
+                                <input type="tel" name="support_phone" value="{{ settings.support_phone }}" placeholder="+63 …" autocomplete="tel">
+                            </label>
+                            <label>Help / status URL <span class="hint">Docs, status page, or contact form.</span>
+                                <input type="url" name="support_url" value="{{ settings.support_url }}" placeholder="https://…">
+                            </label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Language &amp; locale</legend>
+                        <div class="settings-grid">
+                            <label>Default UI language <span class="hint">Used when the user has no session language and no tenant/user override (e.g. storefront, first visit).</span>
+                                <select name="platform_default_language">
+                                    {% for loc in settings.platform_locale_options %}
+                                    <option value="{{ loc.code }}" {% if loc.code == settings.platform_default_language %}selected{% endif %}>{{ loc.label }} ({{ loc.code }})</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label>Default timezone (IANA) <span class="hint">Reference for scheduling and future date displays; extend app code to apply everywhere.</span>
+                                <input type="text" name="default_timezone" value="{{ settings.default_timezone }}" placeholder="Asia/Manila" autocomplete="off">
+                            </label>
+                            <label>Preferred date format <span class="hint">Convention hint: <code class="text-mono">Y-m-d</code>, <code class="text-mono">m/d/Y</code>, etc.</span>
+                                <select name="date_format">
+                                    {% for df, dlabel in [('Y-m-d', 'ISO-style (Y-m-d)'), ('m/d/Y', 'US (m/d/Y)'), ('d/m/Y', 'Day-first (d/m/Y)'), ('d M Y', '10 Apr 2026')] %}
+                                    <option value="{{ df }}" {% if settings.date_format == df %}selected{% endif %}>{{ dlabel }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Access &amp; operations</legend>
+                        <label class="checkbox-line">
+                            <input type="checkbox" name="allow_public_signup" value="1" {% if settings.allow_public_signup == '1' %}checked{% endif %}>
+                            <span>Allow public <code class="text-mono">/signup</code> (self-serve new tenants)</span>
+                        </label>
+                        <p class="hint mb-2">When off, the signup page redirects to login with an explanatory message.</p>
+                        <label class="checkbox-line">
+                            <input type="checkbox" name="platform_maintenance_mode" value="1" {% if settings.platform_maintenance_mode == '1' %}checked{% endif %}>
+                            <span>Maintenance mode (block tenant POS, API, and storefront for non–super-admins)</span>
+                        </label>
+                        <p class="hint mb-2">Super admins can always use <code class="text-mono">/superadmin</code> and <code class="text-mono">/superadmin/login</code>. Signup is blocked while maintenance is on.</p>
+                        <label>Message for maintenance page / API
+                            <textarea name="maintenance_message" rows="2" placeholder="Short message for users…">{{ settings.maintenance_message }}</textarea>
+                        </label>
+                    </fieldset>
+                    <button class="primary-button admin-submit" type="submit">Save platform settings</button>
+                </form>
+                <details class="roadmap mt-3">
+                    <summary class="small fw-semibold" style="cursor:pointer">Roadmap ideas (not toggles yet)</summary>
+                    <ul class="small text-muted mb-0 mt-2 ps-3">
+                        <li><strong>Intermediate:</strong> per-tenant locale packs, email templates per language, enforced session language lock, API rate limits by plan.</li>
+                        <li><strong>Advanced:</strong> IdP / SSO (SAML, OIDC), audit log retention &amp; legal hold, data residency flags, webhook subscriptions for billing and delivery events.</li>
+                        <li><strong>Enterprise:</strong> custom domains per tenant with automated TLS, sandbox vs production API keys, feature flags driven by subscription entitlements only.</li>
+                    </ul>
+                </details>
+                </div>
+            </section>
+            <section class="dashboard-panel admin-section-card" id="audit" data-admin-section hidden>
+                <div class="section-heading">
+                    <div><p class="eyebrow">Audit</p><h2>System audit logs</h2></div>
+                    <a href="{{ url_for('superadmin.audit_export_csv') }}" class="btn btn-sm btn-outline-primary">Export CSV (last 5k)</a>
+                </div>
+                <p class="text-muted small">Showing the 200 most recent entries. Use export for a wider window.</p>
+                <div class="table-shell admin-table-wrap compact-table">
+                    <table class="table">
+                        <thead><tr><th>Time</th><th>Tenant</th><th>Action</th><th>Entity</th><th>Entity ID</th><th>User</th><th>Details</th></tr></thead>
+                        <tbody>
+                            {% for log in audit_logs %}
+                                <tr>
+                                    <td class="small">{{ log.created_at }}</td>
+                                    <td class="small text-mono">{{ log.tenant_id }}</td>
+                                    <td>{{ log.action }}</td>
+                                    <td>{{ log.entity_type }}</td>
+                                    <td>{{ log.entity_id }}</td>
+                                    <td>{{ log.actor_name }}</td>
+                                    <td class="small">{{ log.details }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="7">No audit logs found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <div id="edit-tenant-modal" class="superadmin-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-tenant-title">
+        <div class="superadmin-modal-dialog">
+            <div class="superadmin-modal-head">
+                <h3 id="edit-tenant-title">Edit tenant</h3>
+                <button type="button" class="superadmin-modal-close" data-close-edit-tenant aria-label="Close">&times;</button>
+            </div>
+            <div class="superadmin-modal-body">
+                <form method="POST" action="{{ url_for('superadmin.edit_tenant') }}" class="edit-tenant-form">
+                    <input type="hidden" name="tenant_id" id="edit-tenant-id">
+                    <fieldset>
+                        <legend>Identity &amp; plan</legend>
+                        <div class="form-row-grid">
+                            <label>Tenant name<input type="text" name="tenant_name" id="edit-tenant-name" required autocomplete="organization"></label>
+                            <label>Status<select name="is_active" id="edit-tenant-status"><option value="1">Active</option><option value="0">Inactive</option></select></label>
+                            <label>Plan<select name="plan_name" id="edit-plan-name"><option value="starter">Starter</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></label>
+                            <label>Subscription<select name="subscription_status" id="edit-subscription-status"><option value="trial">Trial</option><option value="active">Active</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option></select></label>
+                            <label>Monthly fee<input type="number" step="0.01" min="0" name="monthly_fee" id="edit-monthly-fee" placeholder="0.00"></label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>POS operating profile</legend>
+                        <div class="form-row-grid">
+                            <label style="grid-column:1/-1;">Profile
+                                <select name="pos_profile" id="edit-pos-profile">
+                                    {% for o in pos_profile_options %}
+                                    <option value="{{ o.id }}">{{ o.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <p class="small text-muted mb-0" style="grid-column:1/-1;">Cashier expectations and roadmap notes: <a href="{{ url_for('superadmin.pos_profiles_reference') }}" target="_blank" rel="noopener">reference</a>.</p>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Billing &amp; contact</legend>
+                        <div class="form-row-grid">
+                            <label style="grid-column:1/-1;">Billing / contact email<input type="email" name="contact_email" id="edit-contact-email" autocomplete="email"></label>
+                            <label>Language<select name="language" id="edit-language"><option value="en">English</option><option value="tl">Filipino</option><option value="es">Spanish</option><option value="fr">French</option><option value="zh">Chinese</option></select></label>
+                            <label>Currency<input type="text" name="billing_currency" id="edit-billing-currency" value="PHP"></label>
+                            <label>Billing cycle<select name="billing_cycle" id="edit-billing-cycle"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select></label>
+                            <label>Next billing<input type="date" name="next_billing_date" id="edit-next-billing-date"></label>
+                            <label>Last payment<input type="date" name="last_payment_date" id="edit-last-payment-date"></label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Payment gateway</legend>
+                        <div class="form-row-grid">
+                            <label>Provider<input type="text" name="payment_gateway" id="edit-payment-gateway" placeholder="paypal, …"></label>
+                            <label>Mode<select name="payment_gateway_mode" id="edit-payment-gateway-mode"><option value="test">Test</option><option value="live">Live</option></select></label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Organization</legend>
+                        <div class="form-row-grid">
+                            <label style="grid-column:1/-1;">Parent tenant (HQ / group)
+                                <select name="parent_tenant_id" id="edit-parent-tenant-id">
+                                    <option value="">— Independent —</option>
+                                    {% for t in tenants %}
+                                    <option value="{{ t.id }}">{{ t.name }} (#{{ t.id }})</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label>Org slug<input type="text" name="org_slug" id="edit-org-slug" placeholder="acme-corp"></label>
+                            <label>Outlet code<input type="text" name="outlet_code" id="edit-outlet-code" placeholder="MNL-01"></label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Compliance (BIR)</legend>
+                        <div class="form-row-grid">
+                            <label>TIN<input type="text" name="bir_tin" id="edit-bir-tin" placeholder="000-000-000-000" autocomplete="off"></label>
+                            <label class="checkbox-row" style="grid-column:1/-1;align-self:end;"><input type="checkbox" name="bir_vat_registered" id="edit-bir-vat-registered" value="1"> VAT registered</label>
+                            <label style="grid-column:1/-1;">Compliance notes<textarea name="compliance_notes" id="edit-compliance-notes" rows="2" placeholder="Permits, exemptions, filing notes…"></textarea></label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Feature entitlements</legend>
+                        <p class="small text-muted mb-2">Per-tenant flags (stored as JSON). Operational modules can read these for gating.</p>
+                        <div class="checkbox-row">
+                            <label><input type="checkbox" name="ff_api" id="edit-ff-api" value="1"> API access</label>
+                            <label><input type="checkbox" name="ff_pos_advanced" id="edit-ff-pos-advanced" value="1"> POS advanced</label>
+                            <label><input type="checkbox" name="ff_multi_branch" id="edit-ff-multi-branch" value="1"> Multi-branch</label>
+                            <label><input type="checkbox" name="ff_bir_exports" id="edit-ff-bir-exports" value="1"> BIR export tools</label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Features</legend>
+                        <div class="checkbox-row">
+                            <label><input type="checkbox" name="delivery_enabled" id="edit-delivery-enabled" value="1"> Rider / delivery ready</label>
+                            <label><input type="checkbox" name="storefront_enabled" id="edit-storefront-enabled" value="1"> Storefront enabled</label>
+                            <label><input type="checkbox" name="auto_storefront_enabled" id="edit-auto-storefront-enabled" value="1"> Auto-post tenant products</label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Delivery integration</legend>
+                        <div class="form-row-grid">
+                            <label>Provider<input type="text" name="delivery_provider" id="edit-delivery-provider"></label>
+                            <label>API key<input type="text" name="delivery_api_key" id="edit-delivery-api-key" autocomplete="off"></label>
+                            <label style="grid-column:1/-1;">Callback URL<input type="text" name="delivery_callback_url" id="edit-delivery-callback-url" placeholder="https://…"></label>
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Storefront</legend>
+                        <div class="form-row-grid">
+                            <label style="grid-column:1/-1;">Storefront URL<input type="text" name="storefront_url" id="edit-storefront-url" placeholder="https://…"></label>
+                        </div>
+                    </fieldset>
+                    <div class="form-actions">
+                        <button class="btn-save" type="submit">Save changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+    <script>
+        const navButtons = document.querySelectorAll('.admin-nav-link');
+        const sections = document.querySelectorAll('[data-admin-section]');
+        const editModal = document.getElementById('edit-tenant-modal');
+        let superAdminChartsDone = false;
+
+        function openEditTenantModal() {
+            if (!editModal) return;
+            editModal.classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+            const first = editModal.querySelector('input:not([type="hidden"]), select');
+            if (first) setTimeout(() => first.focus(), 50);
+        }
+
+        function closeEditTenantModal() {
+            if (!editModal) return;
+            editModal.classList.remove('is-open');
+            document.body.style.overflow = '';
+        }
+
+        function renderSuperAdminCharts() {
+            if (superAdminChartsDone) return;
+            const overview = document.getElementById('overview');
+            if (!overview || overview.hidden) return;
+
+            const tenants = {{ tenants|map(attribute='is_active')|list|tojson }};
+            const users = {{ all_users|map(attribute='role')|list|tojson }};
+
+            const statusCanvas = document.getElementById('tenantStatusChart');
+            if (statusCanvas && Array.isArray(tenants)) {
+                const activeCount = tenants.filter((x) => Number(x) === 1).length;
+                const inactiveCount = tenants.length - activeCount;
+                new Chart(statusCanvas.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Active', 'Inactive'],
+                        datasets: [{ data: [activeCount, inactiveCount], backgroundColor: ['#10b981', '#ef4444'] }],
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+                });
+            }
+
+            const roleCanvas = document.getElementById('userRoleChart');
+            if (roleCanvas && Array.isArray(users)) {
+                const roleCounts = {};
+                users.forEach((r) => { roleCounts[r] = (roleCounts[r] || 0) + 1; });
+                const labels = Object.keys(roleCounts);
+                const values = labels.map((k) => roleCounts[k]);
+                new Chart(roleCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{ data: values, backgroundColor: '#2453d4', borderRadius: 8 }],
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } } },
+                });
+            }
+            superAdminChartsDone = true;
+        }
+
+        function activateSection(targetId) {
+            sections.forEach((section) => {
+                section.hidden = section.id !== targetId;
+            });
+            navButtons.forEach((button) => {
+                button.classList.toggle('active', button.dataset.target === targetId);
+            });
+            window.scrollTo(0, 0);
+            const shell = document.querySelector('.dashboard-shell');
+            if (shell) shell.scrollTop = 0;
+            if (targetId === 'overview') {
+                requestAnimationFrame(() => renderSuperAdminCharts());
+            }
+        }
+
+        navButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                activateSection(button.dataset.target);
+                history.replaceState(null, '', `#${button.dataset.target}`);
+            });
+        });
+
+        if (editModal) {
+            editModal.addEventListener('click', (e) => {
+                if (e.target === editModal) closeEditTenantModal();
+            });
+            editModal.querySelectorAll('[data-close-edit-tenant]').forEach((el) => {
+                el.addEventListener('click', closeEditTenantModal);
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && editModal && editModal.classList.contains('is-open')) {
+                closeEditTenantModal();
+            }
+        });
+
+        document.querySelectorAll('.edit-tenant-button').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.getElementById('edit-tenant-id').value = button.dataset.tenantId;
+                document.getElementById('edit-tenant-name').value = button.dataset.tenantName;
+                document.getElementById('edit-tenant-status').value = button.dataset.tenantStatus === '1' ? '1' : '0';
+                document.getElementById('edit-plan-name').value = button.dataset.planName || 'starter';
+                document.getElementById('edit-subscription-status').value = button.dataset.subscriptionStatus || 'trial';
+                document.getElementById('edit-monthly-fee').value = button.dataset.monthlyFee || '0';
+                document.getElementById('edit-contact-email').value = button.dataset.contactEmail || '';
+                document.getElementById('edit-language').value = button.dataset.language || 'en';
+                document.getElementById('edit-billing-currency').value = button.dataset.billingCurrency || 'PHP';
+                document.getElementById('edit-billing-cycle').value = button.dataset.billingCycle || 'monthly';
+                document.getElementById('edit-next-billing-date').value = button.dataset.nextBillingDate || '';
+                document.getElementById('edit-last-payment-date').value = button.dataset.lastPaymentDate || '';
+                document.getElementById('edit-payment-gateway').value = button.dataset.paymentGateway || '';
+                document.getElementById('edit-payment-gateway-mode').value = button.dataset.paymentGatewayMode || 'test';
+                document.getElementById('edit-delivery-enabled').checked = button.dataset.deliveryEnabled === '1';
+                document.getElementById('edit-delivery-provider').value = button.dataset.deliveryProvider || '';
+                document.getElementById('edit-delivery-api-key').value = button.dataset.deliveryApiKey || '';
+                document.getElementById('edit-delivery-callback-url').value = button.dataset.deliveryCallbackUrl || '';
+                document.getElementById('edit-storefront-enabled').checked = button.dataset.storefrontEnabled === '1';
+                document.getElementById('edit-auto-storefront-enabled').checked = button.dataset.autoStorefrontEnabled === '1';
+                document.getElementById('edit-storefront-url').value = button.dataset.storefrontUrl || '';
+                const parentSel = document.getElementById('edit-parent-tenant-id');
+                const tid = String(button.dataset.tenantId || '');
+                if (parentSel) {
+                    Array.from(parentSel.options).forEach((opt) => {
+                        opt.disabled = Boolean(opt.value && String(opt.value) === tid);
+                    });
+                    parentSel.value = button.dataset.parentTenantId || '';
+                }
+                document.getElementById('edit-org-slug').value = button.dataset.orgSlug || '';
+                document.getElementById('edit-outlet-code').value = button.dataset.outletCode || '';
+                document.getElementById('edit-bir-tin').value = button.dataset.birTin || '';
+                document.getElementById('edit-bir-vat-registered').checked = button.dataset.birVatRegistered === '1';
+                document.getElementById('edit-compliance-notes').value = button.dataset.complianceNotes || '';
+                document.getElementById('edit-ff-api').checked = button.dataset.ffApi === '1';
+                document.getElementById('edit-ff-pos-advanced').checked = button.dataset.ffPosAdvanced === '1';
+                document.getElementById('edit-ff-multi-branch').checked = button.dataset.ffMultiBranch === '1';
+                document.getElementById('edit-ff-bir-exports').checked = button.dataset.ffBirExports === '1';
+                const pp = document.getElementById('edit-pos-profile');
+                if (pp) pp.value = button.dataset.posProfile || 'cafe_bakery';
+                openEditTenantModal();
+            });
+        });
+
+        function toggleTheme() {
+            const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.dataset.theme = t;
+            localStorage.setItem('veyron-theme', t);
+            document.querySelectorAll('.theme-toggle').forEach((b) => b.textContent = t === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19');
+        }
+
+        (function () {
+            const t = localStorage.getItem('veyron-theme') || 'light';
+            document.documentElement.dataset.theme = t;
+            document.querySelectorAll('.theme-toggle').forEach((b) => b.textContent = t === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19');
+            const hashTarget = window.location.hash ? window.location.hash.slice(1) : 'overview';
+            activateSection(document.getElementById(hashTarget) ? hashTarget : 'overview');
+        })();
+    </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

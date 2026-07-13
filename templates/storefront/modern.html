@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="{{ current_locale }}">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="{{ tenant_name }} — {{ _('storefront_tagline') }}" />
+    <title>{{ tenant_name }}</title>
+    <style>
+        body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; line-height: 1.45; }
+        .hero { padding: 1.75rem 1.25rem 1.25rem; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
+        .hero h1 { margin: 0; font-size: 1.65rem; font-weight: 700; letter-spacing: -0.02em; }
+        .hero p { margin: 0.5rem 0 0; color: #94a3b8; font-size: 0.95rem; max-width: 36rem; }
+        .content { padding: 1rem 1.25rem 2rem; max-width: 1200px; margin: 0 auto; }
+        .grid { display: grid; gap: 1rem; }
+        .categories, .products { margin-top: 1.25rem; }
+        .category-list { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+        .product-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+        .category-card, .product-card { border-radius: 14px; overflow: hidden; }
+        .category-card { background: #111827; padding: 1rem; border: 1px solid rgba(148, 163, 184, 0.15); }
+        .category-card h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+        .product-card { display: flex; flex-direction: column; background: #111827; border: 1px solid rgba(148, 163, 184, 0.12); }
+        .product-card img { width: 100%; height: 200px; object-fit: cover; background: #1e293b; }
+        .product-card .product-body { padding: 1rem; }
+        .product-card h3 { margin: 0 0 0.35rem; font-size: 1.05rem; font-weight: 600; }
+        .product-card .meta { color: #94a3b8; font-size: 0.88rem; margin-bottom: 0.35rem; }
+        .product-card .price { color: #38bdf8; font-size: 1.15rem; font-weight: 700; }
+        .badge { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.45rem; border-radius: 6px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; margin-top: 0.35rem; }
+        .footer { padding: 1.25rem; color: #94a3b8; text-align: center; font-size: 0.85rem; border-top: 1px solid rgba(148, 163, 184, 0.12); }
+        .lang-switch { margin-top: 0.75rem; }
+        .lang-switch a { color: #38bdf8; text-decoration: none; margin: 0 0.5rem; }
+        .lang-switch a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <header class="hero">
+        <h1>{{ tenant_name }}</h1>
+        <p>{{ _('storefront_tagline') }}</p>
+    </header>
+
+    <main class="content">
+        <section class="categories" aria-labelledby="cat-heading">
+            <h2 id="cat-heading" style="margin:0 0 0.75rem;font-size:1.15rem;">{{ _('storefront_categories_title') }}</h2>
+            <div class="grid category-list">
+                {% for category in categories %}
+                <div class="category-card">
+                    <h3>{{ category.name }}</h3>
+                </div>
+                {% else %}
+                <div class="category-card">
+                    <h3>{{ _('storefront_no_categories') }}</h3>
+                    <p class="meta">{{ _('storefront_no_categories_hint') }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="products" aria-labelledby="prod-heading">
+            <h2 id="prod-heading" style="margin:1.25rem 0 0.75rem;font-size:1.15rem;">{{ _('storefront_products_title') }}</h2>
+            <div class="grid product-grid">
+                {% for product in products %}
+                <article class="product-card">
+                    {% set img_url = get_product_image_url(product.image_path, product.category_name) %}
+                    <img src="{{ url_for('static', filename=img_url) }}" alt="{{ product.name }}" width="400" height="200" loading="lazy" />
+                    <div class="product-body">
+                        <h3>{{ product.name }}</h3>
+                        <div class="meta">{{ product.category_name or _('storefront_category_unassigned') }} · {{ product.unit_symbol or _('storefront_unit_fallback') }}</div>
+                        <div class="price">₱{{ '%.2f'|format(product.price) }}</div>
+                        <div class="meta">{{ _('storefront_sku_label') }}: {{ product.sku }} · {{ _('storefront_stock_label') }}: {{ product.stock }}</div>
+                        {% if product.status == 'out_of_stock' %}
+                        <span class="badge">{{ _('storefront_out_of_stock') }}</span>
+                        {% endif %}
+                    </div>
+                </article>
+                {% else %}
+                <article class="product-card">
+                    <div class="product-body">
+                        <h3>{{ _('storefront_no_products') }}</h3>
+                        <p class="meta">{{ _('storefront_no_products_hint') }}</p>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>{{ _('storefront_footer_note') }}</p>
+        <nav class="lang-switch" aria-label="{{ _('language_label') }}">
+            <a href="{{ url_for('storefront.storefront', lang='en', theme=request.args.get('theme') or none) }}">{{ _('storefront_lang_en') }}</a>
+            <a href="{{ url_for('storefront.storefront', lang='tl', theme=request.args.get('theme') or none) }}">{{ _('storefront_lang_tl') }}</a>
+        </nav>
+    </footer>
+</body>
+</html>

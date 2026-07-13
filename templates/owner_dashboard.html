@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ business_name }} Owner Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
     <style>:root{--accent:{{ brand_primary }};--accent-strong:{{ brand_primary }};--warning:{{ brand_accent }};}</style>
     <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
 </head>
@@ -19,6 +23,7 @@
             </div>
         </div>
         <nav class="header-nav">
+            <a href="{{ url_for('subscription_plans') }}" class="ghost-link">Plans</a>
             <a href="{{ url_for('admin_dashboard') }}" class="ghost-link">Admin</a>
             <a href="{{ url_for('inventory_dashboard') }}" class="ghost-link">Inventory</a>
             <a href="{{ url_for('pos') }}" class="pos-launch-link ghost-link">POS</a>
@@ -30,12 +35,12 @@
     <main class="dashboard-shell has-sidebar">
         <aside class="dashboard-sidebar">
             <nav class="admin-nav">
-                <a href="#oversight" class="admin-nav-link active">Oversight</a>
-                <a href="#alerts" class="admin-nav-link">Alerts</a>
-                <a href="#backups" class="admin-nav-link">Backups</a>
-                <a href="#settings" class="admin-nav-link">Hardware</a>
-                <a href="#branding" class="admin-nav-link">Branding</a>
-                <a href="#audit" class="admin-nav-link">Audit Trail</a>
+                <a href="#oversight" class="admin-nav-link active"><i class="bi bi-speedometer2 me-2"></i>Oversight</a>
+                <a href="#alerts" class="admin-nav-link"><i class="bi bi-bell me-2"></i>Alerts</a>
+                <a href="#backups" class="admin-nav-link"><i class="bi bi-cloud-arrow-down me-2"></i>Backups</a>
+                <a href="#settings" class="admin-nav-link"><i class="bi bi-hdd-stack me-2"></i>Hardware</a>
+                <a href="#branding" class="admin-nav-link"><i class="bi bi-palette me-2"></i>Branding</a>
+                <a href="#audit" class="admin-nav-link"><i class="bi bi-journal-check me-2"></i>Audit Trail</a>
             </nav>
         </aside>
 
@@ -49,6 +54,18 @@
                     </section>
                 {% endif %}
             {% endwith %}
+
+            {% if demo_limits %}
+            <section class="dashboard-panel mb-4" style="border-left: 4px solid var(--warning, #b54a2f);">
+                <p class="eyebrow mb-1">Demo workspace</p>
+                <h2 class="h5 mb-2">You are exploring with demo limits</h2>
+                <p class="small text-muted mb-2">
+                    Products: <strong>{{ demo_limits.products_used }} / {{ demo_limits.max_products }}</strong>
+                    — Completed sales this month: <strong>{{ demo_limits.sales_this_month }} / {{ demo_limits.max_sales_month }}</strong>
+                </p>
+                <a href="{{ url_for('subscription_plans') }}" class="btn btn-sm btn-primary">View paid plans &amp; unlock full limits</a>
+            </section>
+            {% endif %}
 
             <div class="metrics-grid" id="oversight">
                 <article class="metric-card">
@@ -105,6 +122,73 @@
                     <h2>{{ reports.summary.month_revenue|php }}</h2>
                     <p>{{ reports.summary.month_receipts }} receipt(s) completed this month. Use the audit and backup tools below before major changes.</p>
                 </article>
+            </section>
+
+            <section class="dashboard-panel" id="cash-reads">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Operations</p>
+                        <h2>X / Z Read and Shift Reconciliation</h2>
+                    </div>
+                </div>
+                <div class="dashboard-chart-grid">
+                    <article class="chart-card">
+                        <p class="eyebrow mb-1">X Read (Today Sales)</p>
+                        <p class="mb-1"><strong>Receipts:</strong> {{ cash_reads.x_read.receipt_count }}</p>
+                        <p class="mb-1"><strong>Gross:</strong> {{ cash_reads.x_read.gross_sales|php }}</p>
+                        <p class="mb-1"><strong>Discounts:</strong> {{ cash_reads.x_read.discounts|php }}</p>
+                        <p class="mb-1"><strong>VAT:</strong> {{ cash_reads.x_read.vat|php }}</p>
+                        <p class="mb-0"><strong>Net:</strong> {{ cash_reads.x_read.net_sales|php }}</p>
+                    </article>
+                    <article class="chart-card">
+                        <p class="eyebrow mb-1">Z Read (Closed Shifts)</p>
+                        <p class="mb-1"><strong>Closed shifts:</strong> {{ cash_reads.z_read.closed_shift_count }}</p>
+                        <p class="mb-1"><strong>Expected cash:</strong> {{ cash_reads.z_read.expected_cash|php }}</p>
+                        <p class="mb-1"><strong>Actual cash:</strong> {{ cash_reads.z_read.actual_cash|php }}</p>
+                        <p class="mb-0"><strong>Variance:</strong> {{ cash_reads.z_read.variance|php }}</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="dashboard-panel" id="daily-inventory-tally">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Daily Inventory Reconciliation</p>
+                        <h2>Opening vs Closing Count Tally</h2>
+                    </div>
+                </div>
+                <div class="table-shell compact-table admin-table-wrap">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Manual Open</th>
+                                <th>Manual Close</th>
+                                <th>Expected Close</th>
+                                <th>Variance</th>
+                                <th>Damaged</th>
+                                <th>Wastage</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for shift in recent_shifts %}
+                                <tr>
+                                    <td>{{ shift.shift_date }}</td>
+                                    <td>{{ shift.manual_opening_units or shift.opening_units }}</td>
+                                    <td>{{ shift.manual_closing_units or '—' }}</td>
+                                    <td>{{ shift.expected_closing_units or '—' }}</td>
+                                    <td><span class="status-chip {% if (shift.variance_units or 0) == 0 %}active{% else %}inactive{% endif %}">{{ shift.variance_units or 0 }}</span></td>
+                                    <td>{{ shift.damaged_units or 0 }}</td>
+                                    <td>{{ shift.wastage_units or 0 }}</td>
+                                    <td>{{ shift.status|title }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="8">No shift reconciliation data yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <section class="dashboard-panel" id="alerts">
@@ -196,7 +280,7 @@
                 <form method="post" action="{{ url_for('save_settings') }}" class="settings-grid">
                     <label class="toggle-row">
                         <input type="checkbox" name="auto_print_receipt" value="1" {% if settings.auto_print_receipt == '1' %}checked{% endif %}>
-                        <span>Auto-open print dialog after checkout</span>
+                        <span>Auto print after checkout (browser dialog in browser mode; bridge POST in bridge mode)</span>
                     </label>
                     <label class="toggle-row">
                         <input type="checkbox" name="cash_drawer_enabled" value="1" {% if settings.cash_drawer_enabled == '1' %}checked{% endif %}>
@@ -208,6 +292,11 @@
                             <option value="browser" {% if settings.printer_mode == 'browser' %}selected{% endif %}>Browser print</option>
                             <option value="bridge" {% if settings.printer_mode == 'bridge' %}selected{% endif %}>Local bridge / ESC-POS ready</option>
                         </select>
+                    </label>
+                    <label>
+                        Printer bridge URL
+                        <input type="url" name="printer_bridge_url" value="{{ settings.printer_bridge_url }}" placeholder="http://127.0.0.1:19191/print" autocomplete="off">
+                        <small class="panel-note d-block mt-1">Local service must allow CORS and accept POST JSON (<code>schema</code> veyron.print/1). Run <code>python tools/veyron_print_bridge.py</code> for a demo listener.</small>
                     </label>
                     <label>
                         Drawer note
@@ -225,6 +314,28 @@
                         <input type="checkbox" name="alert_variance_email" value="1" {% if settings.alert_variance_email == '1' %}checked{% endif %}>
                         <span>Email owner on suspicious inventory adjustments</span>
                     </label>
+                    <div class="section-subheading">Delivery Settings</div>
+                    <label class="toggle-row">
+                        <input type="checkbox" name="delivery_enabled" value="1" {% if settings.delivery_enabled == '1' %}checked{% endif %}>
+                        <span>Enable delivery service for this tenant</span>
+                    </label>
+                    <label>
+                        Delivery base fee
+                        <input type="number" name="delivery_fee_base" value="{{ settings.delivery_fee_base or '0.00' }}" step="0.01" min="0">
+                    </label>
+                    <label>
+                        Delivery fee per km
+                        <input type="number" name="delivery_fee_per_km" value="{{ settings.delivery_fee_per_km or '0.00' }}" step="0.01" min="0">
+                    </label>
+                    <label>
+                        Free delivery threshold
+                        <input type="number" name="delivery_fee_free_threshold" value="{{ settings.delivery_fee_free_threshold or '0.00' }}" step="0.01" min="0">
+                    </label>
+                    <label>
+                        Delivery zones
+                        <textarea name="delivery_zones" rows="4" placeholder="Zone name | Postal code, region, or area description">{{ settings.delivery_zones or '' }}</textarea>
+                    </label>
+                    <p class="sidebar-note">Enter one zone per line, for example: Metro Manila | 1000-1999</p>
                     <button type="submit" class="primary-button">Save settings</button>
                 </form>
             </section>
@@ -383,6 +494,86 @@
                     </table>
                 </div>
             </section>
+
+            <!-- Sales Trend & Top Products Graphs -->
+            <section class="dashboard-panel" id="dashboard-graphs">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Trends</p>
+                        <h2>Sales & Top Products</h2>
+                    </div>
+                </div>
+                <div class="dashboard-graphs-flex" style="display:flex;gap:2rem;flex-wrap:wrap;">
+                    <div class="dashboard-graph-card" style="flex:1 1 320px;min-width:300px;">
+                        <canvas id="salesTrendChart" height="120"></canvas>
+                    </div>
+                    <div class="dashboard-graph-card" style="flex:1 1 320px;min-width:300px;">
+                        <canvas id="topProductsChart" height="120"></canvas>
+                    </div>
+                    <div class="dashboard-graph-card" style="flex:1 1 320px;min-width:300px;">
+                        <canvas id="paymentMethodChart" height="120"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Activity Widget -->
+            <section class="dashboard-panel" id="recent-activity">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Recent Activity</p>
+                        <h2>Latest Sales & Actions</h2>
+                    </div>
+                </div>
+                <div class="table-shell compact-table admin-table-wrap">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in metrics.recent_sales %}
+                                <tr>
+                                    <td>{{ sale.created_at }}</td>
+                                    <td>{{ sale.payment_method|title }}</td>
+                                    <td>{{ sale.total|php }}</td>
+                                    <td>{{ sale.status|title }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="4">No recent sales.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+                // Payment Method Chart
+                document.addEventListener('DOMContentLoaded', function() {
+                    const paymentData = {{ metrics.payment_methods|tojson }};
+                    const paymentLabels = paymentData.map(row => row.payment_method);
+                    const paymentTotals = paymentData.map(row => row.total);
+                    const paymentMethodChart = document.getElementById('paymentMethodChart');
+                    if (paymentMethodChart) {
+                        new Chart(paymentMethodChart.getContext('2d'), {
+                            type: 'doughnut',
+                            data: {
+                                labels: paymentLabels,
+                                datasets: [{
+                                    label: 'Sales by Payment Method',
+                                    data: paymentTotals,
+                                    backgroundColor: ['#0f6a5d','#b54a2f','#2c5282','#c05621','#2d3748','#ed8936','#9b2c2c','#d69e2e','#2b6cb0','#38a169'],
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: { legend: { position: 'top' } }
+                            }
+                        });
+                    }
+                });
+            </section>
         </section>
     </main>
 </div>
@@ -399,5 +590,83 @@
         document.querySelectorAll('.theme-toggle').forEach(b=>b.textContent=t==='dark'?'\u2600\uFE0F':'\uD83C\uDF19');
     })();
     </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+
+<!-- Chart.js Dashboard Graphs -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Sales Trend
+        const salesData = {{ metrics.sales_by_day|tojson }};
+        const salesLabels = salesData.map(row => row.day).reverse();
+        const salesRevenue = salesData.map(row => row.revenue).reverse();
+        const salesReceipts = salesData.map(row => row.receipts).reverse();
+        const salesTrendChart = document.getElementById('salesTrendChart');
+        if (salesTrendChart) {
+            new Chart(salesTrendChart.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: salesLabels,
+                    datasets: [
+                        {
+                            label: 'Revenue',
+                            data: salesRevenue,
+                            borderColor: '#0f6a5d',
+                            backgroundColor: 'rgba(15,106,93,0.1)',
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Receipts',
+                            data: salesReceipts,
+                            borderColor: '#b54a2f',
+                            backgroundColor: 'rgba(181,74,47,0.1)',
+                            yAxisID: 'y1',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    stacked: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Revenue' } },
+                        y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Receipts' } }
+                    }
+                }
+            });
+        }
+        // Top Products
+        const topProducts = {{ metrics.top_products|tojson }};
+        const topLabels = topProducts.map(row => row.name);
+        const topQty = topProducts.map(row => row.qty);
+        const topTotal = topProducts.map(row => row.total);
+        const topProductsChart = document.getElementById('topProductsChart');
+        if (topProductsChart) {
+            new Chart(topProductsChart.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: topLabels,
+                    datasets: [
+                        {
+                            label: 'Qty Sold',
+                            data: topQty,
+                            backgroundColor: '#0f6a5d',
+                        },
+                        {
+                            label: 'Sales (₱)',
+                            data: topTotal,
+                            backgroundColor: '#b54a2f',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+    });
+    </script>

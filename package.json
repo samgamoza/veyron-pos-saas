@@ -1,0 +1,13 @@
+{
+  "name": "veyron-pos-saas",
+  "private": true,
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "prisma:generate:etown-mvp-bootstrap": "prisma generate --schema=prisma/schema.etown-mvp-bootstrap.prisma",
+    "prisma:pull": "prisma db pull",
+    "prisma:studio": "prisma studio"
+  },
+  "devDependencies": {
+    "prisma": "^6.7.0"
+  }
+}

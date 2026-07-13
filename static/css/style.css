@@ -1061,6 +1061,34 @@ button {
 .searchable-select-wrap {
     position: relative;
 }
+.product-variant-search-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: flex-end;
+    margin-bottom: 0.75rem;
+}
+.product-variant-search-row .product-search-cell {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+.variant-select-field {
+    flex: 0 1 260px;
+    min-width: 180px;
+}
+.variant-select-label {
+    display: block;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted, #6b6b6b);
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+}
+.product-variant-select {
+    width: 100%;
+    box-sizing: border-box;
+}
 .product-search-input {
     width: 100%;
     box-sizing: border-box;

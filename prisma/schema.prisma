@@ -1,0 +1,204 @@
+// Prisma schema aligned with Flask (app/core/flask_app.py init_db + ensure_column).
+// Use the same DATABASE_URL as the Python app (PostgreSQL recommended).
+// Drift vs schema.etown-mvp.draft.prisma: guest-capable orders, Flask column names,
+// product_variants.stock (not stock_qty), order_items.product_name + created_at.
+// Standalone Postgres MVP (numeric timestamps, stock_qty, marketplace order shape):
+//   sql/etown_marketplace_mvp_bootstrap.sql + prisma/schema.etown-mvp-bootstrap.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                        Int       @id @default(autoincrement())
+  name                      String    @unique
+  subdomain                 String?   @unique
+  status                    String    @default("active")
+  createdAt                 String    @map("created_at")
+  isActive                  Int       @default(1) @map("is_active")
+  planName                  String    @default("starter") @map("plan_name")
+  subscriptionStatus        String    @default("trial") @map("subscription_status")
+  monthlyFee                Float     @default(0) @map("monthly_fee")
+  contactEmail              String    @default("") @map("contact_email")
+  language                  String    @default("en")
+  billingCurrency           String    @default("PHP") @map("billing_currency")
+  billingCycle              String    @default("monthly") @map("billing_cycle")
+  nextBillingDate           String?   @map("next_billing_date")
+  lastPaymentDate           String?   @map("last_payment_date")
+  paymentGateway            String    @default("") @map("payment_gateway")
+  paymentGatewayMode        String    @default("test") @map("payment_gateway_mode")
+  deliveryEnabled           Int       @default(0) @map("delivery_enabled")
+  deliveryProvider          String    @default("") @map("delivery_provider")
+  deliveryApiKey            String    @default("") @map("delivery_api_key")
+  deliveryCallbackUrl       String    @default("") @map("delivery_callback_url")
+  storefrontEnabled         Int       @default(0) @map("storefront_enabled")
+  storefrontUrl             String    @default("") @map("storefront_url")
+  autoStorefrontEnabled     Int       @default(0) @map("auto_storefront_enabled")
+  autoPublishProducts       Int       @default(1) @map("auto_publish_products")
+  storefrontTemplate        String    @default("default") @map("storefront_template")
+  parentTenantId            Int?      @map("parent_tenant_id")
+  orgSlug                   String    @default("") @map("org_slug")
+  outletCode                String    @default("") @map("outlet_code")
+  birTin                    String    @default("") @map("bir_tin")
+  birVatRegistered          Int       @default(0) @map("bir_vat_registered")
+  complianceNotes           String    @default("") @map("compliance_notes")
+  birLastReportGenerated    String?   @map("bir_last_report_generated")
+  featureFlagsJson          String    @default("{}") @map("feature_flags_json")
+  marketplaceEnabled        Int       @default(0) @map("marketplace_enabled")
+  publicBusinessName        String?   @map("public_business_name")
+  publicSubtitle            String?   @map("public_subtitle")
+  publicDescription         String?   @map("public_description")
+  publicAddress             String?   @map("public_address")
+  publicPhone               String?   @map("public_phone")
+  publicCoverImage          String?   @map("public_cover_image")
+  publicLogoImage           String?   @map("public_logo_image")
+  publicOpeningHours        String?   @map("public_opening_hours")
+  province                  String?
+  municipality              String?
+  barangay                  String?
+  storefrontVisibility      String    @default("hidden") @map("storefront_visibility")
+  updatedAt                 String?   @map("updated_at")
+  products                  Product[]
+  productVariants           ProductVariant[]
+  orders                    Order[]
+  orderItems                OrderItem[]
+
+  @@map("tenants")
+}
+
+model Product {
+  id                       Int              @id @default(autoincrement())
+  tenantId                 Int              @map("tenant_id")
+  name                     String
+  sku                      String
+  price                    Float
+  stock                    Int              @default(0)
+  categoryId               Int?             @map("category_id")
+  brandId                  Int?             @map("brand_id")
+  unitId                   Int?             @map("unit_id")
+  reorderLevel             Int              @default(5) @map("reorder_level")
+  cost                     Float            @default(0)
+  status                   String           @default("active")
+  lastRestocked            String?          @map("last_restocked")
+  sortOrder                Int              @default(0) @map("sort_order")
+  imagePath                String?          @map("image_path")
+  isPublic                 Int              @default(1) @map("is_public")
+  marketplaceDescription   String?          @map("marketplace_description")
+  marketplaceImagePath     String?          @map("marketplace_image_path")
+  marketplaceSortOrder     Int              @default(0) @map("marketplace_sort_order")
+  marketplacePublishedAt   String?          @map("marketplace_published_at")
+  slug                     String?
+  tenant                   Tenant           @relation(fields: [tenantId], references: [id])
+  productVariants          ProductVariant[]
+  orderItems               OrderItem[]
+
+  @@unique([tenantId, sku])
+  @@index([slug])
+  @@map("products")
+}
+
+model ProductVariant {
+  id           Int         @id @default(autoincrement())
+  tenantId     Int         @map("tenant_id")
+  productId    Int         @map("product_id")
+  name         String
+  skuSuffix    String      @default("") @map("sku_suffix")
+  price        Float
+  cost         Float       @default(0)
+  stock        Int         @default(0)
+  reorderLevel Int         @default(5) @map("reorder_level")
+  sortOrder    Int         @default(0) @map("sort_order")
+  isActive     Int         @default(1) @map("is_active")
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  product      Product     @relation(fields: [productId], references: [id])
+  orderItems   OrderItem[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model Customer {
+  id        Int               @id @default(autoincrement())
+  phone     String            @unique
+  fullName  String            @default("") @map("full_name")
+  email     String            @default("")
+  createdAt String            @map("created_at")
+  updatedAt String?           @map("updated_at")
+  addresses CustomerAddress[]
+  orders    Order[]
+
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id         Int       @id @default(autoincrement())
+  customerId Int       @map("customer_id")
+  label      String    @default("")
+  line1      String    @map("line1")
+  line2      String    @default("") @map("line2")
+  barangay   String    @default("")
+  city       String    @default("")
+  province   String    @default("")
+  postalCode String    @default("") @map("postal_code")
+  notes      String    @default("")
+  isDefault  Int       @default(0) @map("is_default")
+  createdAt  String    @map("created_at")
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  orders     Order[]
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+model Order {
+  id                Int              @id @default(autoincrement())
+  tenantId          Int              @map("tenant_id")
+  customerId        Int?             @map("customer_id")
+  customerAddressId Int?             @map("customer_address_id")
+  guestName         String           @default("") @map("guest_name")
+  guestPhone        String           @default("") @map("guest_phone")
+  status            String           @default("pending")
+  subtotal          Float
+  tax               Float            @default(0) @map("tax")
+  total             Float
+  notes             String           @default("")
+  deliveryLine1     String           @default("") @map("delivery_line1")
+  deliveryLine2     String           @default("") @map("delivery_line2")
+  deliveryCity      String           @default("") @map("delivery_city")
+  deliveryNotes     String           @default("") @map("delivery_notes")
+  createdAt         String           @map("created_at")
+  updatedAt         String           @map("updated_at")
+  tenant            Tenant           @relation(fields: [tenantId], references: [id])
+  customer          Customer?        @relation(fields: [customerId], references: [id])
+  customerAddress   CustomerAddress? @relation(fields: [customerAddressId], references: [id])
+  items             OrderItem[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          Int             @id @default(autoincrement())
+  tenantId    Int             @map("tenant_id")
+  orderId     Int             @map("order_id")
+  productId   Int             @map("product_id")
+  variantId   Int?            @map("variant_id")
+  productName String          @default("") @map("product_name")
+  quantity    Int
+  unitPrice   Float           @map("unit_price")
+  lineTotal   Float           @map("line_total")
+  createdAt   String          @map("created_at")
+  order       Order           @relation(fields: [orderId], references: [id])
+  product     Product         @relation(fields: [productId], references: [id])
+  variant     ProductVariant? @relation(fields: [variantId], references: [id])
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}

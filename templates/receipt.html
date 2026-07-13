@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ business_name }} Receipt #{{ sale.id }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
     <style>:root{--accent:{{ brand_primary }};--accent-strong:{{ brand_primary }};--warning:{{ brand_accent }};}</style>
     <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
 </head>
@@ -35,12 +38,18 @@
         <section class="receipt-card">
             <div class="receipt-actions no-print">
                 <button type="button" class="primary-button" id="print-receipt-button">Print receipt</button>
+                <button type="button" class="ghost-link ms-2 d-none" id="browser-print-fallback">Browser print</button>
+                <p class="panel-note mb-0 mt-2 d-none" id="print-bridge-status" role="status"></p>
             </div>
+            <script type="application/json" id="veyron-receipt-payload">{{ receipt_payload | tojson }}</script>
 
             <header class="receipt-header">
                 <div>
                     <h1>Order #{{ sale.id }}</h1>
                     <p>{{ business_name }} · {{ sale.created_at }} · {{ sale.payment_method }} · {{ sale.status|title }}</p>
+                    {% if sale.service_reference %}
+                    <p class="mb-0 mt-2"><strong>Table / order</strong> · {{ sale.service_reference }}</p>
+                    {% endif %}
                 </div>
             </header>
 
@@ -78,23 +87,102 @@
 </div>
 
     <script>
-        const printReceiptButton = document.getElementById('print-receipt-button');
+        (function () {
+            const printReceiptButton = document.getElementById('print-receipt-button');
+            const browserPrintFallback = document.getElementById('browser-print-fallback');
+            const bridgeStatus = document.getElementById('print-bridge-status');
+            const printerMode = {{ settings.printer_mode | tojson }};
+            const bridgeUrl = {{ settings.printer_bridge_url | tojson }};
+            const payloadEl = document.getElementById('veyron-receipt-payload');
+            let receiptPayload = null;
+            if (payloadEl) {
+                try {
+                    receiptPayload = JSON.parse(payloadEl.textContent);
+                } catch (e) {
+                    receiptPayload = null;
+                }
+            }
 
-        if (printReceiptButton) {
-            printReceiptButton.addEventListener('click', () => {
-                window.print();
-            });
-        }
+            function setBridgeStatus(message, isError) {
+                if (!bridgeStatus) return;
+                bridgeStatus.textContent = message;
+                bridgeStatus.classList.toggle('d-none', !message);
+                bridgeStatus.style.color = isError ? 'var(--bs-danger, #c00)' : '';
+            }
 
-        {% if settings.auto_print_receipt == '1' %}
-            window.addEventListener('load', () => {
+            async function sendToPrintBridge() {
+                if (!receiptPayload || !bridgeUrl) {
+                    return { ok: false, reason: 'missing payload or URL' };
+                }
+                const body = {
+                    schema: 'veyron.print/1',
+                    receipt: receiptPayload,
+                };
+                try {
+                    const res = await fetch(bridgeUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+                    if (!res.ok) {
+                        return { ok: false, reason: `HTTP ${res.status}` };
+                    }
+                    return { ok: true };
+                } catch (err) {
+                    return { ok: false, reason: err && err.message ? err.message : 'network error' };
+                }
+            }
+
+            function runBrowserPrint() {
                 window.print();
+            }
+
+            if (browserPrintFallback) {
+                browserPrintFallback.addEventListener('click', runBrowserPrint);
+            }
+
+            if (printerMode === 'bridge') {
+                if (browserPrintFallback) browserPrintFallback.classList.remove('d-none');
+                if (printReceiptButton) {
+                    printReceiptButton.textContent = 'Send to printer bridge';
+                }
+            }
+
+            if (printReceiptButton) {
+                printReceiptButton.addEventListener('click', async () => {
+                    if (printerMode === 'bridge') {
+                        setBridgeStatus('Sending to local printer bridge…', false);
+                        const result = await sendToPrintBridge();
+                        if (result.ok) {
+                            setBridgeStatus('Sent to printer bridge.', false);
+                        } else {
+                            setBridgeStatus('Bridge failed (' + result.reason + '). Use Browser print below.', true);
+                        }
+                        return;
+                    }
+                    runBrowserPrint();
+                });
+            }
+
+            {% if settings.auto_print_receipt == '1' %}
+            window.addEventListener('load', async () => {
+                if (printerMode === 'bridge') {
+                    const result = await sendToPrintBridge();
+                    if (result.ok) {
+                        setBridgeStatus('Receipt sent to printer bridge.', false);
+                        return;
+                    }
+                    setBridgeStatus('Bridge unavailable (' + result.reason + '). Opening browser print.', true);
+                }
+                runBrowserPrint();
             });
-        {% endif %}
+            {% endif %}
+        })();
     </script>
     <script>
     function toggleTheme(){var h=document.documentElement;var t=h.dataset.theme==='dark'?'light':'dark';h.dataset.theme=t;localStorage.setItem('veyron-theme',t);document.querySelectorAll('.theme-toggle').forEach(function(b){b.textContent=t==='dark'?'☀️':'🌙';});}
     document.querySelectorAll('.theme-toggle').forEach(function(b){b.textContent=document.documentElement.dataset.theme==='dark'?'☀️':'🌙';});
     </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

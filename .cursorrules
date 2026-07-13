@@ -1,0 +1,53 @@
+You are working on an enterprise-grade Flask multi-tenant SaaS POS system.
+
+STRICT RULES:
+
+1. Multi-Tenancy
+- Every model MUST include tenant_id unless explicitly global
+- All queries MUST filter by tenant_id
+- Never expose cross-tenant data
+
+2. Architecture
+- Use service layer (no business logic in controllers)
+- Controllers = request/response only
+- Services = business logic
+- Models = data only
+
+3. Folder Rules
+- core/ = system-wide logic (tenant, billing, payments, delivery)
+- modules/ = tenant features (pos, inventory, storefront)
+- admin/ = super admin only
+
+4. Delivery Module
+- Must be decoupled from POS
+- Use service calls, not direct model coupling
+- Must support enable/disable per tenant
+
+5. Payments
+- Use gateway abstraction for payments (no provider-specific logic in business code)
+- Each tenant has separate credentials
+
+6. Code Quality
+- Use type hints
+- Use reusable services
+- Avoid duplication
+- Write scalable, modular code
+
+7. Security
+- Validate tenant context in every request
+- Protect admin routes strictly
+
+8. Future-Proofing
+- Write code that supports:
+  - API-first design
+  - mobile apps (rider app)
+  - third-party integrations
+
+Always refactor code to match these rules.
+
+9. How this repo actually works (do not fight it)
+- Much of the web UI still lives in `app/core/flask_app.py` with raw SQL; tenant scoping is enforced via `TenantAwareConnection` / session `tenant_id`, not ORM models everywhere.
+- Global tables (no `tenant_id`): e.g. `tenants`, subscription/plan metadata as modeled in migrations — treat reads/writes as cross-tenant only on explicit super-admin or lifecycle paths.
+- Super-admin and provisioning code may use `get_raw_connection()` or bypass normal tenant filters; keep that narrow and audited.
+- POS checkout uses `sales` / `sale_items`; delivery or storefront may use separate `orders`-style tables — do not assume one unified order model without checking the schema.
+- Shared paths and defaults: `app/core/flask_config.py`. Shared web SQL/helpers: `app/modules/web/queries.py`. Server-rendered HTTP handlers: package `app/modules/web/routes/` (`register_web_routes` in `routes/__init__.py`; submodules `auth`, `pos`, `admin`, `inventory`, `owner`, etc.). Registration on the Flask `app` preserves legacy `url_for('login')` endpoint names.
