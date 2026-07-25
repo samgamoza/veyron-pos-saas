@@ -96,6 +96,10 @@ DEFAULT_APP_SETTINGS = {
     "vat_rate": "0.12",
     "vat_inclusive": "1",
     "vat_registered": "1",
+    # Loyalty: points earned per peso spent, and peso value per point on redemption.
+    "loyalty_enabled": "0",
+    "loyalty_earn_rate": "1",
+    "loyalty_redeem_rate": "1",
 }
 DEFAULT_USERS = [
     {"full_name": "Super Admin", "username": "superadmin", "role": "super_admin", "pin": "superadmin123"},

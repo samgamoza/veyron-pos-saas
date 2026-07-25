@@ -908,6 +908,42 @@ def create_flask_application():
             )
             web_queries.ensure_column(connection, "sales", "location_id", "INTEGER")
 
+            # Promotions (coupon codes) and loyalty (append-only points ledger).
+            connection.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS promotions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    code TEXT NOT NULL,
+                    discount_type TEXT NOT NULL DEFAULT 'percent',
+                    value REAL NOT NULL DEFAULT 0,
+                    min_subtotal REAL NOT NULL DEFAULT 0,
+                    starts_at TEXT,
+                    ends_at TEXT,
+                    usage_limit INTEGER,
+                    used_count INTEGER NOT NULL DEFAULT 0,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants (id),
+                    UNIQUE (tenant_id, code)
+                );
+
+                CREATE TABLE IF NOT EXISTS loyalty_ledger (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id INTEGER NOT NULL,
+                    customer_id INTEGER NOT NULL,
+                    sale_id INTEGER,
+                    points_change INTEGER NOT NULL,
+                    reason TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants (id),
+                    FOREIGN KEY (customer_id) REFERENCES customers (id),
+                    FOREIGN KEY (sale_id) REFERENCES sales (id)
+                );
+                """
+            )
+
             # Ensure the default tenant has a default branch (single-branch default).
             default_loc = connection.execute(
                 "SELECT id FROM locations WHERE tenant_id = 1 AND is_default = 1"
@@ -925,6 +961,8 @@ def create_flask_application():
                 """
                 CREATE INDEX IF NOT EXISTS idx_locations_tenant ON locations (tenant_id);
                 CREATE INDEX IF NOT EXISTS idx_sales_tenant_location ON sales (tenant_id, location_id);
+                CREATE INDEX IF NOT EXISTS idx_promotions_tenant_code ON promotions (tenant_id, code);
+                CREATE INDEX IF NOT EXISTS idx_loyalty_tenant_customer ON loyalty_ledger (tenant_id, customer_id);
                 CREATE INDEX IF NOT EXISTS idx_products_tenant ON products (tenant_id);
                 CREATE INDEX IF NOT EXISTS idx_products_tenant_category ON products (tenant_id, category_id);
                 CREATE INDEX IF NOT EXISTS idx_products_tenant_brand ON products (tenant_id, brand_id);

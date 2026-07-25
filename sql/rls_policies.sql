@@ -192,6 +192,23 @@ DO $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'loyalty_ledger' AND column_name = 'tenant_id'
+  ) THEN
+    ALTER TABLE loyalty_ledger ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE loyalty_ledger FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation ON loyalty_ledger;
+    CREATE POLICY tenant_isolation ON loyalty_ledger
+      USING (current_setting('app.bypass_rls', true) = 'on'
+             OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::bigint)
+      WITH CHECK (current_setting('app.bypass_rls', true) = 'on'
+             OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::bigint);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
     WHERE table_name = 'order_items' AND column_name = 'tenant_id'
   ) THEN
     ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
@@ -300,6 +317,23 @@ BEGIN
     ALTER TABLE products FORCE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS tenant_isolation ON products;
     CREATE POLICY tenant_isolation ON products
+      USING (current_setting('app.bypass_rls', true) = 'on'
+             OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::bigint)
+      WITH CHECK (current_setting('app.bypass_rls', true) = 'on'
+             OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::bigint);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'promotions' AND column_name = 'tenant_id'
+  ) THEN
+    ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE promotions FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation ON promotions;
+    CREATE POLICY tenant_isolation ON promotions
       USING (current_setting('app.bypass_rls', true) = 'on'
              OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::bigint)
       WITH CHECK (current_setting('app.bypass_rls', true) = 'on'
