@@ -1,0 +1,9 @@
+# Normalize line endings. Without this, core.autocrlf=true on Windows checks out
+# shell scripts with CRLF, which breaks them when executed inside Linux containers
+# (e.g. the Postgres initdb role-creation script -> "bad interpreter").
+* text=auto
+
+# Files executed in Linux containers MUST stay LF regardless of platform.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker/** text eol=lf
