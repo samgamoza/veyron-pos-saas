@@ -24,7 +24,9 @@ def tenant_is_demo(connection: Any, tenant_id: int) -> bool:
     ).fetchone()
     if row is None:
         return False
-    return is_demo_plan_name(row.get("plan_name"))
+    # Index access works for both sqlite3.Row and psycopg dict_row; .get() does not
+    # exist on sqlite3.Row and would crash the owner dashboard on SQLite.
+    return is_demo_plan_name(row["plan_name"])
 
 
 def demo_product_count(connection: Any, tenant_id: int) -> int:

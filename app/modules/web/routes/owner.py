@@ -9,6 +9,7 @@ from flask import Flask, flash, redirect, request, send_file, session, url_for
 from app.core.auth import login_required
 from app.core.constants import ALLOWED_IMAGE_EXTENSIONS
 from app.core.db import get_connection
+from app.core.locations import LocationService
 from app.core.flask_config import BACKUP_DIR, DATABASE, DATABASE_ENGINE, DEFAULT_APP_SETTINGS
 from app.modules.users.decorators import roles_required
 from app.modules.web import queries as web_queries
@@ -17,6 +18,65 @@ from app.modules.web.routes.branding import BRAND_LOGO_DIR, THEME_PRESETS
 
 
 def register_owner_routes(app: Flask) -> None:
+    @app.route("/owner/branches/add", methods=["POST"])
+    @login_required("owner")
+    def add_branch():
+        tenant_id = session.get("tenant_id")
+        if not tenant_id:
+            flash("No tenant context.", "error")
+            return redirect(url_for("owner_dashboard"))
+        try:
+            with get_connection() as connection:
+                svc = LocationService(connection)
+                loc_id = svc.create_location(
+                    int(tenant_id),
+                    request.form.get("name", ""),
+                    code=request.form.get("code", ""),
+                    address=request.form.get("address", ""),
+                    phone=request.form.get("phone", ""),
+                    is_default=bool(request.form.get("is_default")),
+                )
+                web_queries.log_audit(connection, "create", "location", loc_id, f"Branch added: {request.form.get('name','').strip()}")
+            flash("Branch added.", "success")
+        except ValueError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("owner_dashboard"))
+
+    @app.route("/owner/branches/set-default", methods=["POST"])
+    @login_required("owner")
+    def set_default_branch():
+        tenant_id = session.get("tenant_id")
+        if not tenant_id:
+            flash("No tenant context.", "error")
+            return redirect(url_for("owner_dashboard"))
+        try:
+            with get_connection() as connection:
+                LocationService(connection).set_default(int(tenant_id), int(request.form.get("location_id", 0)))
+            flash("Default branch updated.", "success")
+        except (ValueError, TypeError) as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("owner_dashboard"))
+
+    @app.route("/owner/branches/toggle-active", methods=["POST"])
+    @login_required("owner")
+    def toggle_branch_active():
+        tenant_id = session.get("tenant_id")
+        if not tenant_id:
+            flash("No tenant context.", "error")
+            return redirect(url_for("owner_dashboard"))
+        try:
+            with get_connection() as connection:
+                svc = LocationService(connection)
+                loc_id = int(request.form.get("location_id", 0))
+                current = svc.get_location(int(tenant_id), loc_id)
+                if current is None:
+                    raise ValueError("Branch not found.")
+                svc.update_location(int(tenant_id), loc_id, is_active=not current["is_active"])
+            flash("Branch updated.", "success")
+        except (ValueError, TypeError) as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("owner_dashboard"))
+
     @app.route("/owner/backups/create", methods=["POST"])
     @login_required("owner")
     def create_backup():

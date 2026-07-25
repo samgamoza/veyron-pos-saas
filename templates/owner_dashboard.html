@@ -272,6 +272,54 @@
                 </div>
             </section>
 
+            <section class="dashboard-panel" id="branches">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Multi-branch</p>
+                        <h2>Branches</h2>
+                    </div>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Name</th><th>Code</th><th>Address</th><th>Status</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for loc in locations %}
+                        <tr>
+                            <td>{{ loc.name }}{% if loc.is_default %} <span class="pill">Default</span>{% endif %}</td>
+                            <td>{{ loc.code }}</td>
+                            <td>{{ loc.address }}</td>
+                            <td>{{ 'Active' if loc.is_active else 'Inactive' }}</td>
+                            <td>
+                                {% if not loc.is_default and loc.is_active %}
+                                <form method="post" action="{{ url_for('set_default_branch') }}" class="inline-form">
+                                    {{ csrf_field() }}
+                                    <input type="hidden" name="location_id" value="{{ loc.id }}">
+                                    <button type="submit" class="ghost-link small-action">Set default</button>
+                                </form>
+                                {% endif %}
+                                {% if not loc.is_default %}
+                                <form method="post" action="{{ url_for('toggle_branch_active') }}" class="inline-form">
+                                    {{ csrf_field() }}
+                                    <input type="hidden" name="location_id" value="{{ loc.id }}">
+                                    <button type="submit" class="ghost-link small-action">{{ 'Deactivate' if loc.is_active else 'Reactivate' }}</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <form method="post" action="{{ url_for('add_branch') }}" class="admin-inline-form">
+                    {{ csrf_field() }}
+                    <input type="text" name="name" placeholder="Branch name" required>
+                    <input type="text" name="code" placeholder="Code (e.g. CEBU)">
+                    <input type="text" name="address" placeholder="Address (optional)">
+                    <input type="text" name="phone" placeholder="Phone (optional)">
+                    <button type="submit" class="primary-button">Add branch</button>
+                </form>
+            </section>
+
             <section class="dashboard-panel" id="settings">
                 <div class="section-heading">
                     <div>

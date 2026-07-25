@@ -1314,9 +1314,12 @@ def fetch_inventory_context() -> dict[str, object]:
 def fetch_owner_context() -> dict[str, object]:
     from app.core.subscription import entitlements as sub_entitlements
 
+    from app.core.locations import LocationService
+
     tenant_id = session.get("tenant_id")
     tenant_plan: dict[str, object] = {}
     demo_limits: dict[str, object] | None = None
+    locations: list[dict[str, object]] = []
     if tenant_id:
         with get_connection() as connection:
             row = connection.execute(
@@ -1329,6 +1332,7 @@ def fetch_owner_context() -> dict[str, object]:
             if row is not None:
                 tenant_plan = dict(row)
             demo_limits = sub_entitlements.demo_limits_summary(connection, int(tenant_id))
+            locations = LocationService(connection).list_locations(int(tenant_id), include_inactive=True)
 
     return {
         "metrics": fetch_dashboard_metrics(),
@@ -1343,6 +1347,7 @@ def fetch_owner_context() -> dict[str, object]:
         "recent_shifts": fetch_recent_shifts(),
         "tenant_plan": tenant_plan,
         "demo_limits": demo_limits,
+        "locations": locations,
     }
 
 
