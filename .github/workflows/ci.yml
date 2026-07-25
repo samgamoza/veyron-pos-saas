@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "hardening/**", "feature/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Full suite on SQLite (the default dev/test engine). Postgres-only tests skip.
+  test-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Run tests
+        run: pytest -q
+
+  # Proves tenant isolation against real Postgres, connecting as a NON-superuser
+  # role — the same precondition production relies on for RLS to enforce.
+  test-postgres-rls:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: veyron
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_DSN: postgresql://veyron_app:apppw@localhost:5432/veyron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Create non-superuser application role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d veyron -v ON_ERROR_STOP=1 -c "
+            CREATE ROLE veyron_app LOGIN PASSWORD 'apppw'
+              NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+            ALTER SCHEMA public OWNER TO veyron_app;
+            GRANT ALL ON SCHEMA public TO veyron_app;"
+      - name: Create schema and apply RLS
+        env:
+          DATABASE_URL: ${{ env.APP_DSN }}
+        run: |
+          python -c "import warnings; warnings.filterwarnings('ignore'); from app import create_app; create_app()"
+          python tools/apply_rls.py
+      - name: Run Postgres RLS isolation tests
+        env:
+          DATABASE_URL: ${{ env.APP_DSN }}
+        run: pytest tests/test_rls_postgres.py -v
