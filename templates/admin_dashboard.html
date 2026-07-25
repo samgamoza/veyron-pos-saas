@@ -130,12 +130,14 @@
                     {% if today_shift is none %}
                         <p class="panel-note">No inventory day open yet.</p>
                         <form method="POST" action="{{ url_for('open_inventory_day') }}" class="d-grid gap-2">
+                            {{ csrf_field() }}
                             <input type="number" min="0" name="opening_units" placeholder="Opening count from cashier" required>
                             <button type="submit" class="primary-button">Open Day</button>
                         </form>
                     {% elif today_shift.status == 'open' %}
                         <p class="panel-note">Opened at {{ today_shift.opened_at }}. You can close once counts are done.</p>
                         <form method="POST" action="{{ url_for('close_inventory_day') }}" class="d-grid gap-2">
+                            {{ csrf_field() }}
                             <input type="hidden" name="shift_id" value="{{ today_shift.id }}">
                             <input type="number" min="0" name="manual_closing_units" placeholder="Manual closing count" required>
                             <input type="number" min="0" name="damaged_units" placeholder="Damaged units" value="0" required>
@@ -150,6 +152,7 @@
                     <p class="eyebrow">Danger zone</p>
                     <p class="panel-note">Use only for hard resets. This sets all product and variant stocks to zero.</p>
                     <form method="POST" action="{{ url_for('reset_inventory_stock') }}" onsubmit="return confirm('Reset all product and variant stock quantities to zero? This cannot be undone automatically.');">
+                        {{ csrf_field() }}
                         <button type="submit" class="btn btn-outline-danger w-100">Reset All Stock to Zero</button>
                     </form>
                 </article>
@@ -194,6 +197,7 @@
                 </div>
 
                 <form method="POST" action="{{ url_for('add_product') }}" class="admin-form-grid" enctype="multipart/form-data">
+                    {{ csrf_field() }}
                     <input type="text" name="name" placeholder="Product Name" required>
                     <input type="number" step="0.01" min="0" name="price" placeholder="Selling Price" required>
                     <input type="number" step="0.01" min="0" name="cost" placeholder="Base Price" required>
@@ -268,6 +272,7 @@
                                     <td>{{ product.category_name }}</td>
                                     <td>
                                         <form method="POST" action="{{ url_for('move_product') }}" class="inline-form move-form">
+                                            {{ csrf_field() }}
                                             <input type="hidden" name="product_id" value="{{ product.id }}">
                                             <label class="move-label">
                                                 <span>Move to No.</span>
@@ -286,6 +291,7 @@
                                             data-unit-id="{{ product.unit_id if product.unit_id is defined else '' }}"
                                             data-status="{{ product.status }}">Edit</button>
                                         <form method="POST" action="{{ url_for('remove_product') }}" class="inline-form danger-form">
+                                            {{ csrf_field() }}
                                             <input type="hidden" name="product_id" value="{{ product.id }}">
                                             <button type="submit" class="ghost-link small-action danger-action">Remove</button>
                                         </form>
@@ -321,6 +327,7 @@
                                                                         data-sku-suffix="{{ variant.sku_suffix }}"
                                                                         data-is-active="{{ variant.is_active }}">Edit</button>
                                                                     <form method="POST" action="{{ url_for('remove_variant') }}" class="inline-form danger-form">
+                                                                        {{ csrf_field() }}
                                                                         <input type="hidden" name="variant_id" value="{{ variant.id }}">
                                                                         <button type="submit" class="ghost-link small-action danger-action">Remove</button>
                                                                     </form>
@@ -348,6 +355,7 @@
                         </div>
                     </div>
                     <form method="POST" action="{{ url_for('update_product') }}" class="admin-form-grid editor-grid" id="product-editor-form" enctype="multipart/form-data">
+                        {{ csrf_field() }}
                         <select name="product_id" id="edit-product-id" required>
                             <option value="">Select Product</option>
                             {% for product in products %}
@@ -401,6 +409,7 @@
                         </div>
                     </div>
                     <form method="POST" action="{{ url_for('add_variant') }}" class="admin-form-grid editor-grid">
+                        {{ csrf_field() }}
                         <select name="product_id" required>
                             <option value="">Select Product</option>
                             {% for product in products %}
@@ -425,6 +434,7 @@
                         </div>
                     </div>
                     <form method="POST" action="{{ url_for('update_variant') }}" class="admin-form-grid editor-grid" id="variant-editor-form">
+                        {{ csrf_field() }}
                         <select name="variant_id" id="edit-variant-id" required>
                             <option value="">Select Variant</option>
                             {% for variant in all_variants %}
@@ -455,6 +465,7 @@
             <section class="dashboard-panel admin-section-card" id="categories" data-admin-section hidden>
                 <div class="section-heading"><div><p class="eyebrow">Categories</p><h2>Product grouping</h2></div></div>
                 <form method="POST" action="{{ url_for('add_category') }}" class="admin-inline-form">
+                    {{ csrf_field() }}
                     <input type="text" name="name" placeholder="Category Name" required>
                     <button class="primary-button" type="submit">Add Category</button>
                 </form>
@@ -468,6 +479,7 @@
                                     <td>{{ category.name }}</td>
                                     <td>
                                         <form method="POST" action="{{ url_for('move_category') }}" class="inline-form move-form">
+                                            {{ csrf_field() }}
                                             <input type="hidden" name="category_id" value="{{ category.id }}">
                                             <label class="move-label"><span>Move to No.</span><input type="number" name="move_to" min="1" value="{{ category.sort_order }}" class="move-input"></label>
                                             <button type="submit" class="ghost-link small-action">Move</button>
@@ -485,6 +497,7 @@
             <section class="dashboard-panel admin-section-card" id="brands" data-admin-section hidden>
                 <div class="section-heading"><div><p class="eyebrow">Brands</p><h2>Supplier labels</h2></div></div>
                 <form method="POST" action="{{ url_for('add_brand') }}" class="admin-inline-form">
+                    {{ csrf_field() }}
                     <input type="text" name="name" placeholder="Brand Name" required>
                     <button class="primary-button" type="submit">Add Brand</button>
                 </form>
@@ -494,6 +507,7 @@
             <section class="dashboard-panel admin-section-card" id="units" data-admin-section hidden>
                 <div class="section-heading"><div><p class="eyebrow">Units</p><h2>Serving measures</h2></div></div>
                 <form method="POST" action="{{ url_for('add_unit') }}" class="admin-inline-form">
+                    {{ csrf_field() }}
                     <input type="text" name="name" placeholder="Unit Name" required>
                     <button class="primary-button" type="submit">Add Unit</button>
                 </form>
@@ -504,6 +518,7 @@
                 <div class="section-heading"><div><p class="eyebrow">Users</p><h2>Cashier and admin access</h2></div></div>
                 {% if current_user and current_user.role == 'owner' %}
                     <form method="POST" action="{{ url_for('add_user') }}" class="admin-form-grid user-form-grid">
+                        {{ csrf_field() }}
                         <input type="text" name="full_name" placeholder="Full Name" required>
                         <input type="text" name="username" placeholder="Username" required>
                         <select name="role" required>
@@ -545,11 +560,13 @@
                                             data-is-active="{{ user.is_active }}">Edit</button>
                                         {% if user.is_active %}
                                             <form method="POST" action="{{ url_for('deactivate_user') }}" class="inline-form danger-form">
+                                                {{ csrf_field() }}
                                                 <input type="hidden" name="user_id" value="{{ user.id }}">
                                                 <button type="submit" class="ghost-link small-action danger-action">Deactivate</button>
                                             </form>
                                         {% else %}
                                             <form method="POST" action="{{ url_for('reactivate_user') }}" class="inline-form">
+                                                {{ csrf_field() }}
                                                 <input type="hidden" name="user_id" value="{{ user.id }}">
                                                 <button type="submit" class="ghost-link small-action">Reactivate</button>
                                             </form>
@@ -569,6 +586,7 @@
                         <span class="close-modal" onclick="document.getElementById('edit-user-modal').style.display='none'">&times;</span>
                         <h3>Edit User</h3>
                         <form method="POST" action="{{ url_for('edit_user') }}" class="admin-form-grid">
+                            {{ csrf_field() }}
                             <input type="hidden" name="user_id" id="edit-user-id">
                             <input type="text" name="full_name" id="edit-full-name" placeholder="Full Name" required>
                             <input type="text" name="username" id="edit-username" placeholder="Username" required>
@@ -593,6 +611,7 @@
                         <span class="close-modal" onclick="document.getElementById('reset-pin-modal').style.display='none'">&times;</span>
                         <h3>Reset User PIN</h3>
                         <form method="POST" action="{{ url_for('reset_user_pin') }}" class="admin-form-grid">
+                            {{ csrf_field() }}
                             <input type="hidden" name="user_id" id="reset-pin-user-id">
                             <input type="password" name="new_pin" placeholder="New PIN" required>
                             <button class="primary-button admin-submit" type="submit">Reset PIN</button>

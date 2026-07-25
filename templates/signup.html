@@ -39,6 +39,7 @@
                 {% endwith %}
 
                 <form method="post" class="login-form">
+                    {{ csrf_field() }}
                     <label>
                         Business name
                         <input type="text" name="business_name" placeholder="e.g. Juan's Mini Mart" required>

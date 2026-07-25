@@ -70,13 +70,20 @@
                 {% if sale.discount_amount %}
                     <div><span>{{ sale.discount_type|replace('_', ' ')|title }} Discount</span><strong>-{{ sale.discount_amount|php }}</strong></div>
                 {% endif %}
-                <div><span>VAT</span><strong>{{ sale.tax|php }}</strong></div>
+                {% if sale.tax and sale.tax > 0 %}
+                    <div><span>VATable Sales</span><strong>{{ (sale.total - sale.tax)|php }}</strong></div>
+                    <div><span>VAT ({{ ((vat_rate or 0) * 100)|round|int }}%)</span><strong>{{ sale.tax|php }}</strong></div>
+                {% else %}
+                    <div><span>VAT-Exempt Sales</span><strong>{{ sale.total|php }}</strong></div>
+                    <div><span>VAT</span><strong>{{ 0.0|php }}</strong></div>
+                {% endif %}
                 <div class="grand-total"><span>Total</span><strong>{{ sale.total|php }}</strong></div>
             </div>
 
             <footer class="receipt-footer">
                 {% if settings.cash_drawer_enabled == '1' %}
                     <form method="post" action="{{ url_for('open_cash_drawer_hook') }}" class="inline-form">
+                        {{ csrf_field() }}
                         <input type="hidden" name="return_to" value="{{ url_for('receipt', sale_id=sale.id) }}">
                         <button type="submit" class="ghost-link">Log cash drawer open</button>
                     </form>

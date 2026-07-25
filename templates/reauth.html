@@ -39,6 +39,7 @@
                 {% endwith %}
 
                 <form method="post" class="login-form">
+                    {{ csrf_field() }}
                     <input type="hidden" name="next" value="{{ next }}">
                     <label>
                         PIN

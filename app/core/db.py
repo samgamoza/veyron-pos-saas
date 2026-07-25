@@ -61,9 +61,43 @@ class PostgresCursorWrapper:
         return self.cursor.fetchall()
 
 
+def _apply_rls_session(connection: Any, *, raw: bool) -> None:
+    """Set the per-connection GUCs that the Postgres RLS policies read.
+
+    Contract (see tools/apply_rls.py):
+      * ``app.bypass_rls = 'on'`` grants cross-tenant access.
+      * ``app.tenant_id``       scopes access to a single tenant when not bypassing.
+
+    Bypass is granted to raw connections, super-admin requests, and any call made
+    outside a Flask request context (init_db, migrations, offline scripts). A normal
+    request without a resolved tenant leaves ``app.tenant_id`` empty, so RLS returns
+    no rows — fail closed rather than leak across tenants.
+    """
+    from flask import has_request_context
+
+    from app.core.tenant.context import current_tenant_id, is_super_admin
+
+    bypass = True
+    tenant_id: int | None = None
+    if not raw and has_request_context():
+        if is_super_admin():
+            bypass = True
+        else:
+            bypass = False
+            tenant_id = current_tenant_id()
+
+    cursor = connection.cursor()
+    cursor.execute("SELECT set_config('app.bypass_rls', %s, false)", ("on" if bypass else "off",))
+    cursor.execute(
+        "SELECT set_config('app.tenant_id', %s, false)",
+        ("" if tenant_id is None else str(int(tenant_id)),),
+    )
+
+
 class PostgresConnectionWrapper:
     def __init__(self, dsn: str) -> None:
         self.connection = pg_connect(dsn, row_factory=dict_row)
+        _apply_rls_session(self.connection, raw=False)
 
     def __enter__(self) -> "PostgresConnectionWrapper":
         return self
@@ -118,6 +152,9 @@ class PostgresConnectionWrapper:
 class RawPostgresConnectionWrapper:
     def __init__(self, dsn: str) -> None:
         self.connection = pg_connect(dsn, row_factory=dict_row)
+        # Raw connections are the deliberate cross-tenant path (login lookups,
+        # provisioning, super-admin). Grant RLS bypass explicitly.
+        _apply_rls_session(self.connection, raw=True)
 
     def __enter__(self) -> "RawPostgresConnectionWrapper":
         return self

@@ -12,6 +12,12 @@ PLATFORM_GATEWAYS_SETTING_KEY = "payment_gateways_platform"
 # Slugs must match PaymentGateway.gateway_name() once implemented.
 GATEWAY_CATALOG: tuple[dict[str, Any], ...] = (
     {
+        "id": "paymongo",
+        "label": "PayMongo (GCash, Maya, QRPH, cards)",
+        "description": "Philippine payments aggregator — one integration for GCash, Maya, QRPH, and cards.",
+        "implementation": "available",
+    },
+    {
         "id": "paypal",
         "label": "PayPal",
         "description": "Cards and PayPal balance; common for cross-border and some PH merchants.",
@@ -19,14 +25,14 @@ GATEWAY_CATALOG: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "gcash",
-        "label": "GCash",
-        "description": "E-wallet payments popular in the Philippines.",
+        "label": "GCash (direct)",
+        "description": "Standalone GCash — covered today via PayMongo; kept for a future direct integration.",
         "implementation": "planned",
     },
     {
         "id": "paymaya",
-        "label": "Maya (PayMaya)",
-        "description": "E-wallet and QR PH payments.",
+        "label": "Maya (direct)",
+        "description": "Standalone Maya — covered today via PayMongo; kept for a future direct integration.",
         "implementation": "planned",
     },
     {
@@ -55,12 +61,12 @@ def catalog_ids() -> set[str]:
 
 
 def default_platform_flags() -> dict[str, dict[str, bool]]:
-    """Default: only PayPal enabled; upcoming gateways off until you turn them on."""
+    """Default: implemented ('available') gateways enabled; 'planned' ones off."""
     out: dict[str, dict[str, bool]] = {}
     for entry in GATEWAY_CATALOG:
         gid = str(entry["id"])
         is_live = entry.get("implementation") == "available"
-        out[gid] = {"enabled": bool(is_live and gid == "paypal")}
+        out[gid] = {"enabled": bool(is_live)}
     return out
 
 

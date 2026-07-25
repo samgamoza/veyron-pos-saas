@@ -7,6 +7,8 @@ import html
 import json
 
 from flask import Flask, Response, flash, g, redirect, request, session, url_for
+from flask_wtf.csrf import CSRFError, CSRFProtect, generate_csrf
+from markupsafe import Markup
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 
@@ -34,6 +36,8 @@ from app.core.flask_config import (
 )
 from app.core.db import get_connection
 from app.core.helpers import peso
+from app.core.rate_limit import limiter
+from app.core.tax import vat_config_from_settings
 from app.core.tenant.context import (
     is_super_admin,
     load_tenant_by_header,
@@ -62,8 +66,22 @@ def create_flask_application():
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     product_service = ProductService()
     storefront_service = StorefrontService()
+
+    # Refuse to boot in production with a weak/absent SECRET_KEY. A predictable
+    # key lets an attacker forge session cookies (including is_super_admin), which
+    # would bypass every tenant-isolation check.
+    DEV_FALLBACK_SECRET = "veyron-pos-dev-key"
+    secret_key = os.getenv("SECRET_KEY", "").strip()
+    if IS_PRODUCTION and (not secret_key or secret_key == DEV_FALLBACK_SECRET):
+        raise RuntimeError(
+            "SECRET_KEY must be set to a strong random value when APP_ENV=production. "
+            "Refusing to start with a missing or development fallback key."
+        )
+    if not secret_key:
+        secret_key = DEV_FALLBACK_SECRET
+
     app.config.update(
-        SECRET_KEY=os.getenv("SECRET_KEY", "veyron-pos-dev-key"),
+        SECRET_KEY=secret_key,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=IS_PRODUCTION,
@@ -71,11 +89,23 @@ def create_flask_application():
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,
     )
 
+    limiter.init_app(app)
+
+    # CSRF protects all server-rendered POST forms. JSON API blueprints (/api/*)
+    # authenticate via their own guards and are exempted below.
+    csrf = CSRFProtect(app)
+
     app.register_blueprint(superadmin_bp)
     app.register_blueprint(product_admin_bp)
     app.register_blueprint(storefront_bp)
     app.register_blueprint(etown_bp)
-    register_api_blueprints(app)
+    register_api_blueprints(app, csrf=csrf)
+
+    # Public JSON order endpoint is consumed programmatically (application/json,
+    # no browser form/session), so form-based CSRF does not apply; exempt it.
+    _json_order_view = app.view_functions.get("etown.place_order_json")
+    if _json_order_view is not None:
+        csrf.exempt(_json_order_view)
 
 
     @app.before_request
@@ -102,8 +132,25 @@ def create_flask_application():
                 g.tenant = tenant
                 g.tenant_id = tenant.id
                 session["tenant_id"] = tenant.id
+            else:
+                # Public eTown marketplace pages are anonymous but still operate inside
+                # one tenant's context (tenant id comes from the URL). Without this,
+                # Postgres RLS fails closed and public shop pages return nothing.
+                endpoint = request.endpoint or ""
+                if endpoint.startswith("etown."):
+                    view_tenant_id = (request.view_args or {}).get("tenant_id")
+                    if view_tenant_id:
+                        public_tenant = load_tenant_by_id(connection, view_tenant_id)
+                        if public_tenant is not None:
+                            g.tenant = public_tenant
+                            g.tenant_id = public_tenant.id
+                            # Deliberately NOT persisted to session: anonymous browsing
+                            # must never bind a visitor's session to a tenant.
 
 
+    app.jinja_env.globals["csrf_field"] = lambda: Markup(
+        f'<input type="hidden" name="csrf_token" value="{generate_csrf()}">'
+    )
     app.jinja_env.filters["php"] = peso
     app.jinja_env.globals["get_product_image_url"] = lambda img, cat=None: web_queries.get_product_image_url(img, cat)
     app.jinja_env.globals["_"] = localization_service.translate
@@ -124,7 +171,8 @@ def create_flask_application():
             "business_name": BUSINESS_NAME,
             "currency_code": CURRENCY_CODE,
             "logo_path": get_logo_path(),
-            "vat_rate": VAT_RATE,
+            # Per-tenant VAT rate (0 when the tenant is not VAT-registered).
+            "vat_rate": vat_config_from_settings(settings).rate if settings.get("vat_registered", "1") != "0" else 0.0,
             "current_user": get_current_user(),
             "brand_primary": settings.get("brand_primary_color", "#0f6a5d"),
             "brand_accent": settings.get("brand_accent_color", "#b54a2f"),
@@ -511,15 +559,18 @@ def create_flask_application():
 
                 CREATE TABLE IF NOT EXISTS customers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id INTEGER,
                     phone TEXT NOT NULL,
                     full_name TEXT NOT NULL DEFAULT '',
                     email TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE (phone)
+                    FOREIGN KEY (tenant_id) REFERENCES tenants (id),
+                    UNIQUE (tenant_id, phone)
                 );
 
                 CREATE TABLE IF NOT EXISTS customer_addresses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id INTEGER,
                     customer_id INTEGER NOT NULL,
                     label TEXT NOT NULL DEFAULT '',
                     line1 TEXT NOT NULL,
@@ -761,7 +812,13 @@ def create_flask_application():
             connection.execute(
                 "INSERT INTO tenants (id, name, is_active) VALUES (1, 'Default Tenant', 1) ON CONFLICT(id) DO NOTHING"
             )
+            # Customer tables predate tenant scoping; add the column before backfilling.
+            web_queries.ensure_column(connection, "customers", "tenant_id", "INTEGER")
+            web_queries.ensure_column(connection, "customer_addresses", "tenant_id", "INTEGER")
+
             for table_name in [
+                "customers",
+                "customer_addresses",
                 "users",
                 "categories",
                 "brands",
@@ -791,21 +848,71 @@ def create_flask_application():
                     (key, value),
                 )
 
-            for user in DEFAULT_USERS:
-                exists = connection.execute(
-                    "SELECT id FROM users WHERE tenant_id = 1 AND username = ?",
-                    (user["username"],),
+            # Account seeding.
+            # Production MUST NOT ship the weak demo owner/admin/cashier PINs. We only
+            # ensure a single platform super-admin exists, sourced from the environment,
+            # so first boot is reachable without hardcoding known credentials.
+            if IS_PRODUCTION:
+                existing_superadmin = connection.execute(
+                    "SELECT id FROM users WHERE role = 'super_admin'"
                 ).fetchone()
-                if exists is None:
+                if existing_superadmin is None:
+                    seed_username = os.getenv("SEED_SUPERADMIN_USERNAME", "").strip().lower()
+                    seed_pin = os.getenv("SEED_SUPERADMIN_PIN", "")
+                    if not seed_username or len(seed_pin) < 8:
+                        raise RuntimeError(
+                            "No super-admin account exists and SEED_SUPERADMIN_USERNAME / "
+                            "SEED_SUPERADMIN_PIN (minimum 8 characters) are not set. Provide "
+                            "them in the environment to create the initial platform super-admin."
+                        )
                     connection.execute(
-                        "INSERT INTO users (tenant_id, full_name, username, role, pin_hash) VALUES (1, ?, ?, ?, ?)",
-                        (
-                            user["full_name"],
-                            user["username"],
-                            user["role"],
-                            generate_password_hash(user["pin"]),
-                        ),
+                        "INSERT INTO users (tenant_id, full_name, username, role, pin_hash) "
+                        "VALUES (NULL, 'Platform Super Admin', ?, 'super_admin', ?)",
+                        (seed_username, generate_password_hash(seed_pin)),
                     )
+            else:
+                for user in DEFAULT_USERS:
+                    exists = connection.execute(
+                        "SELECT id FROM users WHERE tenant_id = 1 AND username = ?",
+                        (user["username"],),
+                    ).fetchone()
+                    if exists is None:
+                        connection.execute(
+                            "INSERT INTO users (tenant_id, full_name, username, role, pin_hash) VALUES (1, ?, ?, ?, ?)",
+                            (
+                                user["full_name"],
+                                user["username"],
+                                user["role"],
+                                generate_password_hash(user["pin"]),
+                            ),
+                        )
+
+            # Tenant-scoped hot paths. Every read is filtered by tenant_id (app-layer
+            # scoper + Postgres RLS), so tenant_id leads each composite index —
+            # without these, tenant-filtered queries degrade into full table scans.
+            connection.executescript(
+                """
+                CREATE INDEX IF NOT EXISTS idx_products_tenant ON products (tenant_id);
+                CREATE INDEX IF NOT EXISTS idx_products_tenant_category ON products (tenant_id, category_id);
+                CREATE INDEX IF NOT EXISTS idx_products_tenant_brand ON products (tenant_id, brand_id);
+                CREATE INDEX IF NOT EXISTS idx_product_variants_tenant_product ON product_variants (tenant_id, product_id);
+                CREATE INDEX IF NOT EXISTS idx_sales_tenant_created ON sales (tenant_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_sales_tenant_status_created ON sales (tenant_id, status, created_at);
+                CREATE INDEX IF NOT EXISTS idx_sales_tenant_cashier ON sales (tenant_id, cashier_user_id);
+                CREATE INDEX IF NOT EXISTS idx_sale_items_tenant_sale ON sale_items (tenant_id, sale_id);
+                CREATE INDEX IF NOT EXISTS idx_sale_items_tenant_product ON sale_items (tenant_id, product_id);
+                CREATE INDEX IF NOT EXISTS idx_stock_movements_tenant_product ON stock_movements (tenant_id, product_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_payments_tenant_sale ON payments (tenant_id, sale_id);
+                CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_created ON audit_logs (tenant_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_owner_alerts_tenant_created ON owner_alerts (tenant_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_customers_tenant ON customers (tenant_id);
+                CREATE INDEX IF NOT EXISTS idx_customer_addresses_tenant_customer ON customer_addresses (tenant_id, customer_id);
+                CREATE INDEX IF NOT EXISTS idx_users_tenant ON users (tenant_id);
+                CREATE INDEX IF NOT EXISTS idx_categories_tenant ON categories (tenant_id);
+                CREATE INDEX IF NOT EXISTS idx_brands_tenant ON brands (tenant_id);
+                CREATE INDEX IF NOT EXISTS idx_units_tenant ON units (tenant_id);
+                """
+            )
 
             web_queries.seed_lookup_table(connection, "categories", DEFAULT_CATEGORIES)
             web_queries.seed_lookup_table(connection, "brands", DEFAULT_BRANDS)
@@ -905,5 +1012,23 @@ def create_flask_application():
         if web_queries.get_setting("onboarding_completed", "0") == "1":
             return None
         return redirect(url_for("onboarding_home"))
+
+    @app.errorhandler(429)
+    def rate_limit_exceeded(exc):
+        if request.path.startswith("/api/"):
+            body = json.dumps(
+                {"error": "rate_limited", "message": "Too many requests. Please slow down and try again shortly."}
+            )
+            return Response(body, status=429, mimetype="application/json; charset=utf-8")
+        flash("Too many attempts. Please wait a moment and try again.", "error")
+        return redirect(request.referrer or url_for("login")), 302
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(exc):
+        if request.path.startswith("/api/"):
+            body = json.dumps({"error": "csrf_failed", "message": exc.description})
+            return Response(body, status=400, mimetype="application/json; charset=utf-8")
+        flash("Your session expired or the form was invalid. Please try again.", "error")
+        return redirect(request.referrer or url_for("login")), 302
 
     return app

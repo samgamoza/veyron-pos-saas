@@ -6,9 +6,8 @@ from app.core.db import get_connection
 from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.pos_finalize import finalize_pos_sale, find_sale_by_idempotency_key
 from app.core.pos_profiles import normalize_pos_profile_id
+from app.core.tax import compute_sale_totals, load_vat_config
 from app.modules.web import queries as web_queries
-
-VAT_RATE = 0.0
 DISCOUNT_PRESETS: dict[str, float | None] = {
     "none": 0.0,
     "senior": 0.20,
@@ -155,10 +154,16 @@ class PosApiService:
                     raise ValueError("No valid line items.")
 
                 subtotal = round(sum(item["line_total"] for item in cart), 2)
-                discount_amount = round(subtotal * discount_rate, 2)
-                discounted_subtotal = round(subtotal - discount_amount, 2)
-                tax = round(discounted_subtotal * VAT_RATE, 2)
-                total = round(discounted_subtotal + tax, 2)
+                # VAT per tenant settings (senior/PWD are VAT-exempt; see app/core/tax.py).
+                vat_totals = compute_sale_totals(
+                    subtotal,
+                    discount_rate,
+                    config=load_vat_config(connection, tenant_id),
+                    discount_type=discount_type,
+                )
+                discount_amount = vat_totals.discount_amount
+                tax = vat_totals.vat_amount
+                total = vat_totals.total
 
                 open_shift = web_queries.fetch_open_cash_shift()
                 cash_shift_id = int(open_shift["id"]) if open_shift else None

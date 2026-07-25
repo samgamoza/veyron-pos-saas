@@ -55,6 +55,7 @@
     </section>
 
     <form method="post" action="{{ url_for('superadmin.save_payment_gateways') }}">
+        {{ csrf_field() }}
         {% for row in payment_gateway_catalog_rows %}
         <article class="gw-card">
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">

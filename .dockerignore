@@ -1,0 +1,24 @@
+# Never bake secrets or local state into the image.
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local SQLite databases and backups — production uses Postgres.
+*.db
+*.sqlite3
+instance/
+backups/
+
+.git/
+.gitignore
+node_modules/
+prisma/
+.vscode/
+generated/

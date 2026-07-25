@@ -10,6 +10,7 @@ from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.delivery.integration_service import DeliveryIntegrationService
 from app.core.subscription.entitlements import assert_demo_allows_checkout
 from app.core.flask_config import BUSINESS_NAME, CURRENCY_CODE, DISCOUNT_PRESETS, VAT_RATE
+from app.core.tax import compute_sale_totals, load_vat_config
 from app.core.pos_payment_model import compute_shift_tender_totals
 from app.core.pos_finalize import finalize_pos_sale, find_sale_by_idempotency_key
 from app.core.pos_profiles import get_profile, normalize_pos_profile_id
@@ -341,10 +342,17 @@ def register_pos_routes(app: Flask, *, storefront_service: StorefrontService) ->
                     flash("Discount must be between 0% and 100%.", "error")
                     return redirect(url_for("pos"))
 
-                discount_amount = round(subtotal * discount_rate, 2)
-                discounted_subtotal = round(subtotal - discount_amount, 2)
-                tax = round(discounted_subtotal * VAT_RATE, 2)
-                total = round(discounted_subtotal + tax, 2)
+                # VAT per tenant settings. Senior/PWD sales are VAT-exempt and the
+                # discount applies to the VAT-exclusive amount (see app/core/tax.py).
+                vat_totals = compute_sale_totals(
+                    subtotal,
+                    discount_rate,
+                    config=load_vat_config(connection, int(tenant_id_check)),
+                    discount_type=discount_type,
+                )
+                discount_amount = vat_totals.discount_amount
+                tax = vat_totals.vat_amount
+                total = vat_totals.total
 
                 open_shift = web_queries.fetch_open_cash_shift()
                 cash_shift_id = open_shift["id"] if open_shift else None

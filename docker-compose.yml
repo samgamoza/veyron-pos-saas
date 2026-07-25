@@ -1,0 +1,68 @@
+# Veyron POS — full stack: app + PostgreSQL + Redis.
+#
+# Quick start:
+#   1. cp .env.production.example .env   (fill in SECRET_KEY, passwords, SEED_SUPERADMIN_*)
+#   2. docker compose up -d --build
+#   3. docker compose exec app python tools/apply_rls.py   # enable tenant isolation
+#
+# The app connects as a NON-superuser role (see docker/initdb) so Postgres RLS
+# is actually enforced.
+
+name: veyron-pos
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-veyron}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-veyron_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      APP_DB_USER: ${APP_DB_USER:-veyron_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # These override anything in .env — the container always runs production
+      # against the compose Postgres/Redis.
+      APP_ENV: production
+      FLASK_DEBUG: "0"
+      DATABASE_URL: postgresql://${APP_DB_USER:-veyron_app}:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB:-veyron}
+      RATELIMIT_STORAGE_URI: redis://redis:6379
+      BACKUP_DIR: /data/backups
+      PRODUCT_IMAGES_DIR: /data/images/products
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - appdata:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  appdata:

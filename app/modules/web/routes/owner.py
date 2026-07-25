@@ -69,7 +69,17 @@ def register_owner_routes(app: Flask) -> None:
     @login_required("owner")
     def save_settings():
         delivery_enabled = 1 if request.form.get("delivery_enabled") else 0
+        # VAT rate is entered as a percentage in the UI and stored as a decimal.
+        raw_vat_percent = request.form.get("vat_rate_percent", "").strip()
+        try:
+            vat_rate_value = f"{max(0.0, min(100.0, float(raw_vat_percent))) / 100:.4f}"
+        except ValueError:
+            vat_rate_value = DEFAULT_APP_SETTINGS["vat_rate"]
+
         settings = {
+            "vat_rate": vat_rate_value,
+            "vat_inclusive": "1" if request.form.get("vat_inclusive") else "0",
+            "vat_registered": "1" if request.form.get("vat_registered") else "0",
             "auto_print_receipt": "1" if request.form.get("auto_print_receipt") else "0",
             "cash_drawer_enabled": "1" if request.form.get("cash_drawer_enabled") else "0",
             "printer_mode": request.form.get("printer_mode", "browser").strip() or "browser",

@@ -133,6 +133,7 @@
 
                 <div class="inventory-workbench" style="grid-template-columns: 1fr;">
                     <form method="POST" action="{{ url_for('adjust_inventory') }}" class="inventory-adjust-form" id="adjustForm">
+                        {{ csrf_field() }}
                         <p class="eyebrow">Stock adjustment</p>
                         <h3>Record restocks and count corrections</h3>
 
@@ -141,12 +142,14 @@
                             <h3 style="margin-bottom:0.6rem;">Opening / Closing Inventory Tally</h3>
                             {% if today_shift is none %}
                                 <form method="POST" action="{{ url_for('open_inventory_day') }}" class="d-grid gap-2">
+                                    {{ csrf_field() }}
                                     <input type="number" min="0" name="opening_units" placeholder="Opening count from cashier" required>
                                     <button type="submit" class="primary-button">Open Day (Start Count)</button>
                                 </form>
                             {% elif today_shift.status == 'open' %}
                                 <p class="panel-note" style="margin-bottom:0.5rem;">Shift is open. Input end-of-day counts before closing.</p>
                                 <form method="POST" action="{{ url_for('close_inventory_day') }}" class="d-grid gap-2">
+                                    {{ csrf_field() }}
                                     <input type="hidden" name="shift_id" value="{{ today_shift.id }}">
                                     <input type="number" min="0" name="manual_closing_units" placeholder="Manual closing count" required>
                                     <input type="number" min="0" name="damaged_units" placeholder="Damaged units" value="0" required>
@@ -289,6 +292,7 @@
                                 </div>
                             </div>
                             <form method="POST" action="{{ url_for('open_inventory_day') }}">
+                                {{ csrf_field() }}
                                 <input type="number" min="0" name="opening_units" placeholder="Opening count from cashier" class="shift-notes-input" required>
                                 <button type="submit" class="primary-button shift-btn open-btn">Open Day</button>
                             </form>
@@ -303,6 +307,7 @@
                                 </div>
                             </div>
                             <form method="POST" action="{{ url_for('close_inventory_day') }}" class="shift-close-form" onsubmit="return confirm('Close today\'s inventory shift? This will snapshot all current stock levels.')">
+                                {{ csrf_field() }}
                                 <input type="hidden" name="shift_id" value="{{ today_shift.id }}">
                                 <input type="number" min="0" name="manual_closing_units" placeholder="Manual closing count" class="shift-notes-input" required>
                                 <input type="number" min="0" name="damaged_units" placeholder="Damaged units" class="shift-notes-input" value="0" required>
@@ -357,6 +362,7 @@
             <section class="dashboard-panel admin-section-card" id="suppliers" data-inventory-section hidden>
                 <div class="section-heading"><div><p class="eyebrow">Suppliers</p><h2>Supplier directory</h2></div></div>
                 <form method="POST" action="{{ url_for('add_supplier') }}" class="supplier-form-grid">
+                    {{ csrf_field() }}
                     <input type="text" name="name" placeholder="Supplier Name" required>
                     <input type="text" name="contact_person" placeholder="Contact Person">
                     <input type="text" name="phone" placeholder="Phone">
@@ -371,6 +377,7 @@
                 <div class="section-heading"><div><p class="eyebrow">Purchasing</p><h2>Purchase orders and receiving</h2></div></div>
                 <div class="inventory-workbench wide-workbench">
                     <form method="POST" action="{{ url_for('add_purchase_order') }}" class="inventory-adjust-form">
+                        {{ csrf_field() }}
                         <p class="eyebrow">New PO</p>
                         <h3>Create a quick purchase order</h3>
                         <select name="supplier_id" required>
@@ -390,6 +397,7 @@
                         <p class="eyebrow">Receive PO</p>
                         <h3>Post received stock</h3>
                         <form method="POST" action="{{ url_for('receive_purchase_order') }}" class="admin-inline-form stacked-inline-form">
+                            {{ csrf_field() }}
                             <select name="purchase_order_id" required>
                                 <option value="">Select Purchase Order</option>
                                 {% for order in purchase_orders %}
@@ -410,7 +418,8 @@
 
             <section class="dashboard-panel admin-section-card" id="stock-counts" data-inventory-section hidden>
                 <div class="section-heading"><div><p class="eyebrow">Stock Count</p><h2>Physical count and variance</h2></div>
-                    <form method="POST" action="{{ url_for('create_stock_count') }}"><input type="hidden" name="title" value="Cycle Count"><button type="submit" class="primary-button">Start stock count</button></form>
+                    <form method="POST" action="{{ url_for('create_stock_count') }}">
+                        {{ csrf_field() }}<input type="hidden" name="title" value="Cycle Count"><button type="submit" class="primary-button">Start stock count</button></form>
                 </div>
 
                 {% if open_stock_count %}
@@ -418,6 +427,7 @@
                         <p class="eyebrow">Open count</p>
                         <h3>{{ open_stock_count.title }} · {{ open_stock_count.created_at }}</h3>
                         <form method="POST" action="{{ url_for('complete_stock_count') }}" class="count-form-grid">
+                            {{ csrf_field() }}
                             <input type="hidden" name="stock_count_id" value="{{ open_stock_count.id }}">
                             <div class="table-shell compact-table admin-table-wrap">
                                 <table class="table">
@@ -495,8 +505,10 @@
                                     <td>{{ sale.total|php }}</td>
                                     <td>
                                         {% if sale.status == 'completed' %}
-                                            <form method="POST" action="{{ url_for('void_sale') }}" class="inline-form danger-form" onsubmit="return confirm('Void receipt #{{ sale.id }}? This will reverse the sale and restore stock. This cannot be undone.')"><input type="hidden" name="sale_id" value="{{ sale.id }}"><button type="submit" class="ghost-link small-action danger-action">Void</button></form>
-                                            <form method="POST" action="{{ url_for('refund_sale') }}" class="inline-form danger-form" onsubmit="return confirm('Refund receipt #{{ sale.id }}? The customer will be refunded {{ sale.total|php }}.')"><input type="hidden" name="sale_id" value="{{ sale.id }}"><button type="submit" class="ghost-link small-action">Refund</button></form>
+                                            <form method="POST" action="{{ url_for('void_sale') }}" class="inline-form danger-form" onsubmit="return confirm('Void receipt #{{ sale.id }}? This will reverse the sale and restore stock. This cannot be undone.')">
+                                                {{ csrf_field() }}<input type="hidden" name="sale_id" value="{{ sale.id }}"><button type="submit" class="ghost-link small-action danger-action">Void</button></form>
+                                            <form method="POST" action="{{ url_for('refund_sale') }}" class="inline-form danger-form" onsubmit="return confirm('Refund receipt #{{ sale.id }}? The customer will be refunded {{ sale.total|php }}.')">
+                                                {{ csrf_field() }}<input type="hidden" name="sale_id" value="{{ sale.id }}"><button type="submit" class="ghost-link small-action">Refund</button></form>
                                         {% else %}
                                             <span class="panel-note">Closed</span>
                                         {% endif %}

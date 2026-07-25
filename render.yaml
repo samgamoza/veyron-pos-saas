@@ -1,10 +1,26 @@
+# Render blueprint. Managed Postgres (NOT SQLite) so Row-Level Security tenant
+# isolation is enforceable. Render's DB role owns the database but is not a
+# superuser, which is what RLS requires.
+#
+# After the first deploy, enable the policies once:
+#   render shell veyron-pos  ->  python tools/apply_rls.py
+#
+# Adjust `plan` values to match your Render account tier.
+
+databases:
+  - name: veyron-db
+    databaseName: veyron
+    user: veyron_app
+    plan: basic-256mb
+
 services:
   - type: web
     name: veyron-pos
     env: python
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app
+    # --preload runs init_db() once in the master before forking workers.
+    startCommand: gunicorn wsgi:app --preload --workers 3
     healthCheckPath: /healthz
     disk:
       name: veyron-data
@@ -17,12 +33,35 @@ services:
         value: "0"
       - key: SECRET_KEY
         generateValue: true
-      - key: SQLITE_DATABASE_PATH
-        value: /data/pos.db
+      # Dedicated key for encrypting stored payment credentials. Set once —
+      # changing it makes existing payment credentials undecryptable.
+      - key: PAYMENT_CREDENTIALS_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: veyron-db
+          property: connectionString
+      # First-boot super admin (PIN >= 8 chars). Set in the Render dashboard.
+      - key: SEED_SUPERADMIN_USERNAME
+        sync: false
+      - key: SEED_SUPERADMIN_PIN
+        sync: false
       - key: PRODUCT_IMAGES_DIR
         value: /data/images/products
       - key: BACKUP_DIR
         value: /data/backups
+      # Required because --workers 3 means limits must be shared across processes.
+      # Point at a Redis instance, e.g. redis://red-xxxx:6379
+      - key: RATELIMIT_STORAGE_URI
+        sync: false
+      - key: PAYMONGO_SECRET_KEY
+        sync: false
+      - key: PAYMONGO_PUBLIC_KEY
+        sync: false
+      - key: PAYMONGO_WEBHOOK_SECRET
+        sync: false
+      - key: STORE_FRONT_BASE_HOST
+        sync: false
       - key: ALERT_TO_EMAIL
         sync: false
       - key: ALERT_FROM_EMAIL

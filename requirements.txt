@@ -1,4 +1,7 @@
+cryptography
 flask
+flask-limiter>=3.5
+flask-wtf>=1.2
 gunicorn
 psycopg[binary]
 python-dotenv

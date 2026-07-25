@@ -35,6 +35,8 @@ SCOPED_TABLES = {
     "orders",
     "order_items",
     "payments",
+    "customers",
+    "customer_addresses",
 }
 TABLE_NAME_RE = re.compile(
     r"(?:insert\s+into|update|delete\s+from|from)\s+([a-zA-Z_][a-zA-Z0-9_]*)",

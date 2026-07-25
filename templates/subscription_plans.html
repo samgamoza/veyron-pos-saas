@@ -78,6 +78,7 @@
                 <button type="button" class="btn btn-outline-secondary w-100" disabled>Included with signup</button>
                 {% else %}
                 <form method="post" action="{{ url_for('subscription_select_plan') }}">
+                    {{ csrf_field() }}
                     <input type="hidden" name="plan_id" value="{{ plan.id }}">
                     <button type="submit" class="btn btn-primary w-100">Select this plan</button>
                 </form>

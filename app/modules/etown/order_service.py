@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.db import DATABASE_ENGINE, get_raw_connection
-from app.core.flask_config import VAT_RATE
+from app.core.tax import compute_sale_totals, load_vat_config
 
 
 @dataclass
@@ -103,29 +103,37 @@ class MarketplaceOrderService:
             out.setdefault(pid, []).append(d)
         return out
 
-    def _ensure_customer(self, connection: Any, phone: str, full_name: str) -> int | None:
+    def _ensure_customer(self, connection: Any, tenant_id: int, phone: str, full_name: str) -> int | None:
+        """Look up or create a customer WITHIN the given tenant.
+
+        Customers are tenant-scoped: the same phone number may exist under many
+        merchants, and one merchant must never read or overwrite another's record.
+        """
         phone = phone.strip()
         if not phone:
             return None
         full_name = (full_name or "").strip()
-        row = connection.execute("SELECT id FROM customers WHERE phone = ?", (phone,)).fetchone()
+        row = connection.execute(
+            "SELECT id FROM customers WHERE tenant_id = ? AND phone = ?",
+            (tenant_id, phone),
+        ).fetchone()
         if row:
             cid = int(row["id"])
             if full_name:
                 connection.execute(
-                    "UPDATE customers SET full_name = ? WHERE id = ?",
-                    (full_name, cid),
+                    "UPDATE customers SET full_name = ? WHERE tenant_id = ? AND id = ?",
+                    (full_name, tenant_id, cid),
                 )
             return cid
         if DATABASE_ENGINE == "postgres":
             ins = connection.execute(
-                "INSERT INTO customers (phone, full_name) VALUES (?, ?) RETURNING id",
-                (phone, full_name),
+                "INSERT INTO customers (tenant_id, phone, full_name) VALUES (?, ?, ?) RETURNING id",
+                (tenant_id, phone, full_name),
             ).fetchone()
             return int(ins["id"]) if ins else None
         connection.execute(
-            "INSERT INTO customers (phone, full_name) VALUES (?, ?)",
-            (phone, full_name),
+            "INSERT INTO customers (tenant_id, phone, full_name) VALUES (?, ?, ?)",
+            (tenant_id, phone, full_name),
         )
         ins = connection.execute("SELECT last_insert_rowid() AS id").fetchone()
         return int(ins["id"]) if ins else None
@@ -248,12 +256,15 @@ class MarketplaceOrderService:
                         }
                     )
 
-            tax = subtotal * float(VAT_RATE or 0)
-            total = subtotal + tax
+            vat_totals = compute_sale_totals(
+                subtotal, config=load_vat_config(conn, tenant_id), discount_type="none"
+            )
+            tax = vat_totals.vat_amount
+            total = vat_totals.total
 
             phone_for_customer = (customer_phone or guest_phone).strip()
             name_for_customer = (customer_full_name or guest_name).strip()
-            customer_id = self._ensure_customer(conn, phone_for_customer, name_for_customer)
+            customer_id = self._ensure_customer(conn, tenant_id, phone_for_customer, name_for_customer)
             customer_address_id = None
 
             if DATABASE_ENGINE == "postgres":

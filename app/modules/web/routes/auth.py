@@ -7,6 +7,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.auth import get_current_user, login_required, post_login_redirect_for_user
 from app.core.db import get_connection, get_raw_connection
+from app.core.rate_limit import limiter
 from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.helpers import normalize_lookup_name
 from app.core.localization import localization_service
@@ -18,6 +19,7 @@ from app.modules.web import queries as web_queries
 
 def register_auth_routes(app: Flask) -> None:
     @app.route("/login", methods=["GET", "POST"])
+    @limiter.limit("10 per minute; 40 per hour", methods=["POST"])
     def login() -> str:
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
@@ -56,6 +58,7 @@ def register_auth_routes(app: Flask) -> None:
 
 
     @app.route("/signup", methods=["GET", "POST"])
+    @limiter.limit("5 per minute; 20 per hour", methods=["POST"])
     def signup() -> str:
         if web_queries.get_platform_setting("allow_public_signup", "1") != "1":
             flash("New tenant registration is temporarily closed. Contact support if you need access.", "error")
@@ -141,6 +144,7 @@ def register_auth_routes(app: Flask) -> None:
 
 
     @app.route("/superadmin/login", methods=["GET", "POST"])
+    @limiter.limit("10 per minute; 40 per hour", methods=["POST"])
     def superadmin_login() -> str:
         next_url = request.args.get("next") or request.form.get("next", "")
         if request.method == "POST":
@@ -171,6 +175,7 @@ def register_auth_routes(app: Flask) -> None:
 
     @app.route("/reauth", methods=["GET", "POST"])
     @login_required("owner", "admin", "cashier", "super_admin")
+    @limiter.limit("10 per minute; 40 per hour", methods=["POST"])
     def reauth() -> str:
         user = get_current_user()
         if user is None:

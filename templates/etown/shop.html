@@ -28,6 +28,7 @@
 
         {% if products %}
         <form method="post" action="{{ url_for('etown.place_order', tenant_id=tenant.id) }}" class="card card-body shadow-sm">
+            {{ csrf_field() }}
             <h2 class="h6 text-uppercase text-muted">Your details</h2>
             <div class="row g-2 mb-3">
                 <div class="col-md-6">

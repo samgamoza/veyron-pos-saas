@@ -4,6 +4,7 @@ from typing import Any
 
 from .credentials import PaymentCredentialStore
 from .gateway import PaymentGateway
+from .paymongo_gateway import PayMongoGateway
 from .paypal_gateway import PayPalGateway
 from .registry import gateway_enabled_for_platform
 
@@ -11,6 +12,7 @@ from .registry import gateway_enabled_for_platform
 class PaymentService:
     GATEWAY_CLASSES: dict[str, type[PaymentGateway]] = {
         PayPalGateway.gateway_name(): PayPalGateway,
+        PayMongoGateway.gateway_name(): PayMongoGateway,
     }
 
     def __init__(self, connection: Any) -> None:
@@ -33,12 +35,17 @@ class PaymentService:
                 f"Gateway '{gateway_name}' is disabled at platform level. "
                 "Enable it under Super Admin → Payment gateways."
             )
-        config = self.credentials_store.load_credentials(tenant_id, gateway_name)
-        if config is None:
-            raise ValueError(f"Gateway configuration not found for tenant {tenant_id} and gateway {gateway_name}.")
         gateway_cls = self.GATEWAY_CLASSES.get(gateway_name)
         if gateway_cls is None:
             raise ValueError(f"Unsupported gateway: {gateway_name}")
+        config = self.credentials_store.load_credentials(tenant_id, gateway_name)
+        if config is None:
+            # Platform-level fallback (e.g. one PayMongo account configured via env).
+            env_config = getattr(gateway_cls, "config_from_env", lambda: None)()
+            if env_config:
+                config = env_config
+        if config is None:
+            raise ValueError(f"Gateway configuration not found for tenant {tenant_id} and gateway {gateway_name}.")
         return gateway_cls(config)
 
     def charge(self, tenant_id: int, gateway_name: str, amount: float, currency: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -55,7 +62,10 @@ class PaymentService:
         gateway_cls = self.GATEWAY_CLASSES.get(gateway_name)
         if gateway_cls is None:
             raise ValueError(f"Unsupported gateway: {gateway_name}")
-        gateway = gateway_cls({})
+        # Platform-level config carries the webhook signing secret; without it the
+        # gateway can never verify a signature.
+        config = getattr(gateway_cls, "config_from_env", lambda: None)() or {}
+        gateway = gateway_cls(config)
         return gateway.handle_webhook(payload, headers)
 
     def supported_gateways(self) -> list[str]:

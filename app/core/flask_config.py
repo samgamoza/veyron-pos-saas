@@ -29,7 +29,9 @@ PLACEHOLDER_MAP = {
 DEFAULT_PLACEHOLDER = "images/products/placeholder-default.svg"
 BUSINESS_NAME = "Veyron's Cakes and Pastries"
 CURRENCY_CODE = "PHP"
-VAT_RATE = 0.00
+# Legacy fallback only. Real VAT is per-tenant via app_settings — see app/core/tax.py
+# (`vat_rate`, `vat_inclusive`, `vat_registered`).
+VAT_RATE = 0.12
 REAUTH_TTL_SECONDS = 600
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
@@ -89,6 +91,11 @@ DEFAULT_APP_SETTINGS = {
     "brand_accent_color": "#b54a2f",
     "brand_theme_mode": "warm",
     "brand_logo_path": "",
+    # Philippine VAT. Retail prices are VAT-inclusive by default; set
+    # vat_registered=0 for non-VAT (percentage-tax) merchants.
+    "vat_rate": "0.12",
+    "vat_inclusive": "1",
+    "vat_registered": "1",
 }
 DEFAULT_USERS = [
     {"full_name": "Super Admin", "username": "superadmin", "role": "super_admin", "pin": "superadmin123"},
