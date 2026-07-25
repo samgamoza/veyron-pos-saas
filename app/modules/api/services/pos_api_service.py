@@ -6,6 +6,7 @@ from app.core.db import get_connection
 from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.pos_finalize import finalize_pos_sale, find_sale_by_idempotency_key
 from app.core.pos_profiles import normalize_pos_profile_id
+from app.core.locations import LocationService
 from app.core.tax import compute_sale_totals, load_vat_config
 from app.modules.web import queries as web_queries
 DISCOUNT_PRESETS: dict[str, float | None] = {
@@ -65,6 +66,7 @@ class PosApiService:
         service_reference: str = "",
         idempotency_key: str | None = None,
         payment_lines: list[dict[str, Any]] | None = None,
+        location_id: int | None = None,
     ) -> tuple[int, bool]:
         if not lines:
             raise ValueError("At least one line item is required.")
@@ -168,6 +170,10 @@ class PosApiService:
                 open_shift = web_queries.fetch_open_cash_shift()
                 cash_shift_id = int(open_shift["id"]) if open_shift else None
 
+                active_location_id = LocationService(connection).resolve_active_location_id(
+                    tenant_id, location_id
+                )
+
                 return finalize_pos_sale(
                     connection,
                     tenant_id=tenant_id,
@@ -185,6 +191,7 @@ class PosApiService:
                     cash_shift_id=cash_shift_id,
                     idempotency_key=idem,
                     payment_lines=payment_lines,
+                    location_id=active_location_id,
                 )
         except DB_INTEGRITY_ERRORS:
             if idem:

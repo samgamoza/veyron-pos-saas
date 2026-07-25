@@ -73,6 +73,7 @@ def finalize_pos_sale(
     payment_lines: list[dict[str, Any]] | None = None,
     payment_status: str = "completed",
     payment_reference: str = "",
+    location_id: int | None = None,
 ) -> tuple[int, bool]:
     """
     Returns (sale_id, created).
@@ -103,9 +104,9 @@ def finalize_pos_sale(
             subtotal, discount_type, discount_rate, discount_amount, discount_note,
             service_reference,
             tax, total, payment_method, status, cashier_user_id, cash_shift_id,
-            idempotency_key
+            idempotency_key, location_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)
         RETURNING id
         """,
         (
@@ -122,6 +123,7 @@ def finalize_pos_sale(
             cashier_user_id,
             cash_shift_id,
             idempotency_key,
+            location_id,
         ),
     ).fetchone()
     sale_id = int(sale_row["id"])

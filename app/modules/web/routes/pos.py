@@ -10,6 +10,7 @@ from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.delivery.integration_service import DeliveryIntegrationService
 from app.core.subscription.entitlements import assert_demo_allows_checkout
 from app.core.flask_config import BUSINESS_NAME, CURRENCY_CODE, DISCOUNT_PRESETS, VAT_RATE
+from app.core.locations import LocationService
 from app.core.tax import compute_sale_totals, load_vat_config
 from app.core.pos_payment_model import compute_shift_tender_totals
 from app.core.pos_finalize import finalize_pos_sale, find_sale_by_idempotency_key
@@ -357,6 +358,10 @@ def register_pos_routes(app: Flask, *, storefront_service: StorefrontService) ->
                 open_shift = web_queries.fetch_open_cash_shift()
                 cash_shift_id = open_shift["id"] if open_shift else None
 
+                active_location_id = LocationService(connection).resolve_active_location_id(
+                    int(tenant_id_check), session.get("location_id")
+                )
+
                 sale_id, _created = finalize_pos_sale(
                     connection,
                     tenant_id=int(tenant_id_check),
@@ -373,6 +378,7 @@ def register_pos_routes(app: Flask, *, storefront_service: StorefrontService) ->
                     payment_method=payment_method,
                     cash_shift_id=cash_shift_id,
                     idempotency_key=idem_raw,
+                    location_id=active_location_id,
                 )
 
                 if tenant_id_check:

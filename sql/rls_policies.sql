@@ -175,6 +175,23 @@ DO $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'locations' AND column_name = 'tenant_id'
+  ) THEN
+    ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE locations FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation ON locations;
+    CREATE POLICY tenant_isolation ON locations
+      USING (current_setting('app.bypass_rls', true) = 'on'
+             OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::bigint)
+      WITH CHECK (current_setting('app.bypass_rls', true) = 'on'
+             OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::bigint);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
     WHERE table_name = 'order_items' AND column_name = 'tenant_id'
   ) THEN
     ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;

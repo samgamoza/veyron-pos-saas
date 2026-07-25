@@ -887,11 +887,44 @@ def create_flask_application():
                             ),
                         )
 
+            # Multi-branch: a tenant may operate several locations (branches). Each
+            # sale is attributed to one. Per-location stock is a deliberate follow-up.
+            connection.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS locations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    code TEXT NOT NULL DEFAULT '',
+                    address TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    is_default INTEGER NOT NULL DEFAULT 0,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants (id),
+                    UNIQUE (tenant_id, name)
+                );
+                """
+            )
+            web_queries.ensure_column(connection, "sales", "location_id", "INTEGER")
+
+            # Ensure the default tenant has a default branch (single-branch default).
+            default_loc = connection.execute(
+                "SELECT id FROM locations WHERE tenant_id = 1 AND is_default = 1"
+            ).fetchone()
+            if default_loc is None:
+                connection.execute(
+                    "INSERT INTO locations (tenant_id, name, code, is_default, is_active) "
+                    "VALUES (1, 'Main Branch', 'MAIN', 1, 1)"
+                )
+
             # Tenant-scoped hot paths. Every read is filtered by tenant_id (app-layer
             # scoper + Postgres RLS), so tenant_id leads each composite index —
             # without these, tenant-filtered queries degrade into full table scans.
             connection.executescript(
                 """
+                CREATE INDEX IF NOT EXISTS idx_locations_tenant ON locations (tenant_id);
+                CREATE INDEX IF NOT EXISTS idx_sales_tenant_location ON sales (tenant_id, location_id);
                 CREATE INDEX IF NOT EXISTS idx_products_tenant ON products (tenant_id);
                 CREATE INDEX IF NOT EXISTS idx_products_tenant_category ON products (tenant_id, category_id);
                 CREATE INDEX IF NOT EXISTS idx_products_tenant_brand ON products (tenant_id, brand_id);

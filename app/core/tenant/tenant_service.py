@@ -134,6 +134,10 @@ class TenantService:
         )
 
         self._create_default_settings(tenant.id)
+        # Every tenant starts with one default branch.
+        from app.core.locations import LocationService
+
+        LocationService(self.connection).ensure_default(tenant.id)
         trigger_tenant_hooks(tenant, "tenant_created", {"plan_name": plan_name})
         return tenant
 
