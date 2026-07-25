@@ -45,6 +45,7 @@ def create_order():
             idempotency_key=str(body.get("idempotency_key", "") or "").strip() or None,
             payment_lines=pay_lines,
             location_id=body.get("location_id"),
+            promo_code=str(body.get("promo_code", "") or ""),
         )
         msg = "Order created." if created else "Idempotent replay: existing sale."
         return ok_json({"sale_id": sale_id, "created": created}, message=msg, status=201 if created else 200)

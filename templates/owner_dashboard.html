@@ -320,6 +320,53 @@
                 </form>
             </section>
 
+            <section class="dashboard-panel" id="promotions">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Marketing</p>
+                        <h2>Promotions</h2>
+                    </div>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Code</th><th>Name</th><th>Discount</th><th>Min spend</th><th>Used</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for promo in promotions %}
+                        <tr>
+                            <td><strong>{{ promo.code }}</strong></td>
+                            <td>{{ promo.name }}</td>
+                            <td>{% if promo.discount_type == 'percent' %}{{ promo.value }}%{% else %}{{ promo.value|php }}{% endif %}</td>
+                            <td>{{ promo.min_subtotal|php }}</td>
+                            <td>{{ promo.used_count }}{% if promo.usage_limit %} / {{ promo.usage_limit }}{% endif %}</td>
+                            <td>{{ 'Active' if promo.is_active else 'Inactive' }}</td>
+                            <td>
+                                <form method="post" action="{{ url_for('toggle_promotion') }}" class="inline-form">
+                                    {{ csrf_field() }}
+                                    <input type="hidden" name="promotion_id" value="{{ promo.id }}">
+                                    <input type="hidden" name="activate" value="{{ '0' if promo.is_active else '1' }}">
+                                    <button type="submit" class="ghost-link small-action">{{ 'Deactivate' if promo.is_active else 'Activate' }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <form method="post" action="{{ url_for('add_promotion') }}" class="admin-inline-form">
+                    {{ csrf_field() }}
+                    <input type="text" name="code" placeholder="Code (e.g. SAVE10)" required>
+                    <input type="text" name="name" placeholder="Name" required>
+                    <select name="discount_type">
+                        <option value="percent">Percent (%)</option>
+                        <option value="amount">Amount (₱)</option>
+                    </select>
+                    <input type="number" name="value" placeholder="Value" min="0" step="0.01" required>
+                    <input type="number" name="min_subtotal" placeholder="Min spend" min="0" step="0.01">
+                    <input type="number" name="usage_limit" placeholder="Usage limit (optional)" min="1" step="1">
+                    <button type="submit" class="primary-button">Add promotion</button>
+                </form>
+            </section>
+
             <section class="dashboard-panel" id="settings">
                 <div class="section-heading">
                     <div>
@@ -329,6 +376,18 @@
                 </div>
                 <form method="post" action="{{ url_for('save_settings') }}" class="settings-grid">
                     {{ csrf_field() }}
+                    <label class="toggle-row">
+                        <input type="checkbox" name="loyalty_enabled" value="1" {% if settings.get('loyalty_enabled', '0') == '1' %}checked{% endif %}>
+                        <span>Enable loyalty points</span>
+                    </label>
+                    <label>
+                        Points earned per ₱1 spent
+                        <input type="number" name="loyalty_earn_rate" min="0" step="0.01" value="{{ settings.get('loyalty_earn_rate', '1') }}">
+                    </label>
+                    <label>
+                        Peso value per point (redemption)
+                        <input type="number" name="loyalty_redeem_rate" min="0" step="0.01" value="{{ settings.get('loyalty_redeem_rate', '1') }}">
+                    </label>
                     <label class="toggle-row">
                         <input type="checkbox" name="vat_registered" value="1" {% if settings.get('vat_registered', '1') == '1' %}checked{% endif %}>
                         <span>VAT-registered business (uncheck for non-VAT / percentage-tax merchants)</span>

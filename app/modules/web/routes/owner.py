@@ -10,6 +10,7 @@ from app.core.auth import login_required
 from app.core.constants import ALLOWED_IMAGE_EXTENSIONS
 from app.core.db import get_connection
 from app.core.locations import LocationService
+from app.core.promotions import PromotionError, PromotionService
 from app.core.flask_config import BACKUP_DIR, DATABASE, DATABASE_ENGINE, DEFAULT_APP_SETTINGS
 from app.modules.users.decorators import roles_required
 from app.modules.web import queries as web_queries
@@ -77,6 +78,48 @@ def register_owner_routes(app: Flask) -> None:
             flash(str(exc), "error")
         return redirect(url_for("owner_dashboard"))
 
+    @app.route("/owner/promotions/add", methods=["POST"])
+    @login_required("owner")
+    def add_promotion():
+        tenant_id = session.get("tenant_id")
+        if not tenant_id:
+            flash("No tenant context.", "error")
+            return redirect(url_for("owner_dashboard"))
+        try:
+            with get_connection() as connection:
+                pid = PromotionService(connection).create_promotion(
+                    int(tenant_id),
+                    request.form.get("name", ""),
+                    request.form.get("code", ""),
+                    discount_type=request.form.get("discount_type", "percent"),
+                    value=float(request.form.get("value", 0) or 0),
+                    min_subtotal=float(request.form.get("min_subtotal", 0) or 0),
+                    usage_limit=int(request.form["usage_limit"]) if request.form.get("usage_limit") else None,
+                )
+                web_queries.log_audit(connection, "create", "promotion", pid, f"Promo added: {request.form.get('code','').strip()}")
+            flash("Promotion added.", "success")
+        except (PromotionError, ValueError) as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("owner_dashboard"))
+
+    @app.route("/owner/promotions/toggle", methods=["POST"])
+    @login_required("owner")
+    def toggle_promotion():
+        tenant_id = session.get("tenant_id")
+        if not tenant_id:
+            flash("No tenant context.", "error")
+            return redirect(url_for("owner_dashboard"))
+        try:
+            with get_connection() as connection:
+                svc = PromotionService(connection)
+                promo_id = int(request.form.get("promotion_id", 0))
+                activate = request.form.get("activate") == "1"
+                svc.set_active(int(tenant_id), promo_id, activate)
+            flash("Promotion updated.", "success")
+        except (ValueError, TypeError) as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("owner_dashboard"))
+
     @app.route("/owner/backups/create", methods=["POST"])
     @login_required("owner")
     def create_backup():
@@ -136,10 +179,19 @@ def register_owner_routes(app: Flask) -> None:
         except ValueError:
             vat_rate_value = DEFAULT_APP_SETTINGS["vat_rate"]
 
+        def _clean_rate(field: str, default: str) -> str:
+            try:
+                return f"{max(0.0, float(request.form.get(field, default))):.4f}"
+            except ValueError:
+                return default
+
         settings = {
             "vat_rate": vat_rate_value,
             "vat_inclusive": "1" if request.form.get("vat_inclusive") else "0",
             "vat_registered": "1" if request.form.get("vat_registered") else "0",
+            "loyalty_enabled": "1" if request.form.get("loyalty_enabled") else "0",
+            "loyalty_earn_rate": _clean_rate("loyalty_earn_rate", DEFAULT_APP_SETTINGS["loyalty_earn_rate"]),
+            "loyalty_redeem_rate": _clean_rate("loyalty_redeem_rate", DEFAULT_APP_SETTINGS["loyalty_redeem_rate"]),
             "auto_print_receipt": "1" if request.form.get("auto_print_receipt") else "0",
             "cash_drawer_enabled": "1" if request.form.get("cash_drawer_enabled") else "0",
             "printer_mode": request.form.get("printer_mode", "browser").strip() or "browser",

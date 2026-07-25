@@ -7,6 +7,7 @@ from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.pos_finalize import finalize_pos_sale, find_sale_by_idempotency_key
 from app.core.pos_profiles import normalize_pos_profile_id
 from app.core.locations import LocationService
+from app.core.promotions import PromotionService
 from app.core.tax import compute_sale_totals, load_vat_config
 from app.modules.web import queries as web_queries
 DISCOUNT_PRESETS: dict[str, float | None] = {
@@ -67,6 +68,7 @@ class PosApiService:
         idempotency_key: str | None = None,
         payment_lines: list[dict[str, Any]] | None = None,
         location_id: int | None = None,
+        promo_code: str = "",
     ) -> tuple[int, bool]:
         if not lines:
             raise ValueError("At least one line item is required.")
@@ -156,6 +158,18 @@ class PosApiService:
                     raise ValueError("No valid line items.")
 
                 subtotal = round(sum(item["line_total"] for item in cart), 2)
+
+                # A promotion code applies only when no built-in discount is chosen
+                # (it must not stack with senior/PWD/custom). It's a vatable discount.
+                promotion_id = None
+                promo_code = (promo_code or "").strip()
+                if promo_code and discount_type == "none":
+                    quote = PromotionService(connection).validate_and_quote(tenant_id, promo_code, subtotal)
+                    discount_rate = quote["discount_rate"]
+                    discount_type = "promo"
+                    discount_note = f"Promo {quote['code']}"
+                    promotion_id = quote["promotion_id"]
+
                 # VAT per tenant settings (senior/PWD are VAT-exempt; see app/core/tax.py).
                 vat_totals = compute_sale_totals(
                     subtotal,
@@ -174,7 +188,7 @@ class PosApiService:
                     tenant_id, location_id
                 )
 
-                return finalize_pos_sale(
+                sale_id, created = finalize_pos_sale(
                     connection,
                     tenant_id=tenant_id,
                     cashier_user_id=cashier_user_id,
@@ -193,6 +207,10 @@ class PosApiService:
                     payment_lines=payment_lines,
                     location_id=active_location_id,
                 )
+                # Only count a redemption for a genuinely new sale, not an idempotent replay.
+                if created and promotion_id is not None:
+                    PromotionService(connection).record_redemption(tenant_id, promotion_id)
+                return sale_id, created
         except DB_INTEGRITY_ERRORS:
             if idem:
                 with get_connection() as c2:

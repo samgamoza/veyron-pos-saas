@@ -346,6 +346,12 @@ class MarketplaceOrderService:
                     ),
                 )
 
+            # Accrue loyalty points for the ordering customer (no-op if disabled).
+            if customer_id:
+                from app.core.loyalty import LoyaltyService
+
+                LoyaltyService(conn).earn_for_sale(tenant_id, int(customer_id), None, float(total))
+
             if DATABASE_ENGINE == "postgres":
                 conn.connection.commit()
             else:
