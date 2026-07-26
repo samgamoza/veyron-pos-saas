@@ -20,6 +20,9 @@ if not os.environ.get("SQLITE_DATABASE_PATH"):
     _tmp.close()
     os.environ["SQLITE_DATABASE_PATH"] = _tmp.name
 
+# PAYMONGO_WEBHOOK_SECRET is one process-wide env var. Every test module that sets it
+# (see also test_pay_on_order.py) must use this exact value, or whichever module the
+# test runner imports last silently overwrites it for all the others.
 WEBHOOK_SECRET = "whsk_test_secret"
 os.environ["PAYMONGO_SECRET_KEY"] = "sk_test_dummy"
 os.environ["PAYMONGO_PUBLIC_KEY"] = "pk_test_dummy"

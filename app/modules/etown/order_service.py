@@ -70,6 +70,16 @@ class MarketplaceOrderService:
             return None
         return dict(row)
 
+    def get_order_public(self, tenant_id: int, order_id: int) -> dict[str, Any] | None:
+        """Tenant-scoped order lookup for the customer-facing confirmation page."""
+        with get_raw_connection() as connection:
+            row = connection.execute(
+                "SELECT id, tenant_id, status, total, payment_status, payment_method, payment_reference "
+                "FROM orders WHERE tenant_id = ? AND id = ?",
+                (tenant_id, order_id),
+            ).fetchone()
+        return dict(row) if row else None
+
     def list_public_products(self, tenant_id: int) -> list[dict[str, Any]]:
         with get_raw_connection() as connection:
             rows = connection.execute(

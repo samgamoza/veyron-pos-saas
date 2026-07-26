@@ -603,6 +603,9 @@ def create_flask_application():
                     delivery_line2 TEXT NOT NULL DEFAULT '',
                     delivery_city TEXT NOT NULL DEFAULT '',
                     delivery_notes TEXT NOT NULL DEFAULT '',
+                    payment_status TEXT NOT NULL DEFAULT 'unpaid',
+                    payment_method TEXT NOT NULL DEFAULT '',
+                    payment_reference TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (tenant_id) REFERENCES tenants (id),
@@ -909,6 +912,10 @@ def create_flask_application():
                 """
             )
             web_queries.ensure_column(connection, "sales", "location_id", "INTEGER")
+            # Optional online payment for eTown/QR orders (pay-now-or-at-counter).
+            web_queries.ensure_column(connection, "orders", "payment_status", "TEXT NOT NULL DEFAULT 'unpaid'")
+            web_queries.ensure_column(connection, "orders", "payment_method", "TEXT NOT NULL DEFAULT ''")
+            web_queries.ensure_column(connection, "orders", "payment_reference", "TEXT NOT NULL DEFAULT ''")
 
             # Promotions (coupon codes) and loyalty (append-only points ledger).
             connection.executescript(

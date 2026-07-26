@@ -4,25 +4,62 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Order placed · {{ tenant.name }}</title>
+    {% if order.payment_status == 'awaiting_payment' %}<meta http-equiv="refresh" content="5">{% endif %}
     <style>
         body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:#f6f7f9; color:#1a1a1a;
                display:flex; align-items:center; justify-content:center; min-height:100vh; padding:1.25rem; }
-        .card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:2rem 1.5rem; max-width:420px; text-align:center; }
+        .card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:2rem 1.5rem; max-width:420px; width:100%; text-align:center; }
         .check { width:64px; height:64px; border-radius:50%; background:#dcfce7; color:#15803d; font-size:2rem;
                  display:flex; align-items:center; justify-content:center; margin:0 auto 1rem; }
         h1 { font-size:1.3rem; margin:.25rem 0; }
         .ref { font-size:1.1rem; font-weight:700; margin:.5rem 0; }
+        .total { font-size:1.05rem; margin:.25rem 0 1rem; color:#374151; }
         p { color:#6b7280; line-height:1.5; }
+        .flash { margin:0 0 1rem; padding:.6rem .8rem; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:10px; font-size:.9rem; }
+        .badge { display:inline-block; padding:.25rem .65rem; border-radius:999px; font-size:.8rem; font-weight:600; margin-bottom:.75rem; }
+        .badge.unpaid { background:#fef3c7; color:#92400e; }
+        .badge.awaiting { background:#dbeafe; color:#1e40af; }
+        .badge.paid { background:#dcfce7; color:#15803d; }
+        .badge.failed { background:#fee2e2; color:#991b1b; }
+        .pay-btn { display:block; width:100%; background:#0f6a5d; color:#fff; border:none; padding:.85rem; border-radius:10px;
+                   font-size:1rem; font-weight:600; margin-top:.5rem; cursor:pointer; }
         a.again { display:inline-block; margin-top:1.25rem; color:#0f6a5d; font-weight:600; text-decoration:none; }
     </style>
 </head>
 <body>
     <div class="card">
+        {% with messages = get_flashed_messages() %}
+            {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+        {% endwith %}
+
         <div class="check">✓</div>
         <h1>Order placed</h1>
-        <div class="ref">Reference #{{ order_id }}</div>
+        <div class="ref">Reference #{{ order.id }}</div>
+        <div class="total">Total: ₱{{ "%.2f"|format(order.total) }}</div>
         {% if table %}<p>Table {{ table }}</p>{% endif %}
-        <p>Thank you! {{ tenant.name }} has received your order and will confirm it shortly.</p>
+
+        {% if order.payment_status == 'paid' %}
+            <span class="badge paid">Paid ✓</span>
+            <p>Payment received. {{ tenant.name }} is preparing your order.</p>
+        {% elif order.payment_status == 'awaiting_payment' %}
+            <span class="badge awaiting">Payment pending</span>
+            <p>We're waiting for your payment to confirm. This page will refresh automatically — you can also pay at the counter instead.</p>
+        {% elif order.payment_status == 'payment_failed' %}
+            <span class="badge failed">Payment failed</span>
+            <p>That payment didn't go through. You can try again below, or pay at the counter.</p>
+        {% else %}
+            <span class="badge unpaid">Pay at counter</span>
+            <p>{{ tenant.name }} has received your order and will confirm it shortly. You can pay online now, or pay at the counter when it's ready.</p>
+        {% endif %}
+
+        {% if show_pay_button %}
+        <form method="post" action="{{ url_for('order.pay_order', tenant_id=tenant.id, order_id=order.id) }}">
+            {{ csrf_field() }}
+            <input type="hidden" name="table" value="{{ table }}">
+            <button type="submit" class="pay-btn">Pay online now (GCash / Maya / Card)</button>
+        </form>
+        {% endif %}
+
         <a class="again" href="{{ url_for('order.order_page', tenant_id=tenant.id, table=table or none) }}">Place another order</a>
     </div>
 </body>

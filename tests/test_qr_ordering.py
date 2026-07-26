@@ -64,8 +64,9 @@ class ScanToOrderTest(unittest.TestCase):
                 f"qty_{self.product_id}": "2",
             },
         )
-        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
-        self.assertIn("Order placed", res.get_data(as_text=True))
+        # Post/Redirect/Get: a successful order redirects to its confirmation page.
+        self.assertEqual(res.status_code, 302, res.get_data(as_text=True))
+        self.assertIn("/order/1/confirmation/", res.headers["Location"])
         with get_raw_connection() as conn:
             row = conn.execute(
                 "SELECT status, total, notes FROM orders WHERE tenant_id = 1 ORDER BY id DESC LIMIT 1"
@@ -73,6 +74,13 @@ class ScanToOrderTest(unittest.TestCase):
         self.assertEqual(row["status"], "pending")
         self.assertEqual(float(row["total"]), 160.0)  # 2 x 80, VAT-inclusive
         self.assertIn("Table 12", row["notes"])
+
+        confirm = self.app.test_client().get(res.headers["Location"])
+        self.assertEqual(confirm.status_code, 200)
+        confirm_html = confirm.get_data(as_text=True)
+        self.assertIn("Order placed", confirm_html)
+        self.assertIn("Table 12", confirm_html)
+        self.assertIn("160.00", confirm_html)
 
     def test_order_page_404_when_disabled(self) -> None:
         with get_raw_connection() as conn:
