@@ -49,6 +49,7 @@ from app.core.localization import localization_service
 from app.modules.products.product_service import ProductService
 from app.modules.api import register_api_blueprints
 from app.modules.etown import etown_bp
+from app.modules.order import order_bp
 from app.modules.storefront import storefront_bp
 from app.modules.storefront.storefront_service import StorefrontService
 from app.modules.web import queries as web_queries
@@ -99,6 +100,7 @@ def create_flask_application():
     app.register_blueprint(product_admin_bp)
     app.register_blueprint(storefront_bp)
     app.register_blueprint(etown_bp)
+    app.register_blueprint(order_bp)
     register_api_blueprints(app, csrf=csrf)
 
     # Public JSON order endpoint is consumed programmatically (application/json,

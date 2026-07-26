@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>Order · {{ tenant.name }}</title>
+    <style>
+        :root { --bg:#f6f7f9; --card:#fff; --ink:#1a1a1a; --muted:#6b7280; --brand:#0f6a5d; --line:#e5e7eb; }
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--ink); padding-bottom: 96px; }
+        header { background:var(--brand); color:#fff; padding: 1rem 1.1rem; position: sticky; top:0; z-index:5; }
+        header h1 { margin:0; font-size:1.15rem; }
+        header .table-tag { display:inline-block; margin-top:.35rem; background:rgba(255,255,255,.2); padding:.15rem .5rem; border-radius:6px; font-size:.8rem; }
+        .items { padding: .75rem; display:flex; flex-direction:column; gap:.6rem; }
+        .item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.75rem .85rem; display:flex; align-items:center; gap:.75rem; }
+        .item .info { flex:1; min-width:0; }
+        .item .name { font-weight:600; }
+        .item .price { color:var(--muted); font-size:.9rem; }
+        .item .oos { color:#b91c1c; font-size:.8rem; }
+        select { width:100%; margin-top:.4rem; padding:.35rem; border:1px solid var(--line); border-radius:8px; font-size:.85rem; }
+        .stepper { display:flex; align-items:center; gap:.4rem; }
+        .stepper button { width:34px; height:34px; border:1px solid var(--line); background:#fff; border-radius:8px; font-size:1.2rem; line-height:1; cursor:pointer; }
+        .stepper input { width:44px; text-align:center; border:1px solid var(--line); border-radius:8px; height:34px; font-size:1rem; }
+        .details { padding: .75rem; }
+        .details input, .details textarea { width:100%; padding:.6rem; border:1px solid var(--line); border-radius:10px; margin-top:.5rem; font-size:1rem; background:#fff; }
+        .bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); padding:.75rem 1rem; display:flex; align-items:center; gap:.75rem; }
+        .bar .total { font-weight:700; font-size:1.15rem; flex:1; }
+        .bar button { background:var(--brand); color:#fff; border:none; padding:.8rem 1.2rem; border-radius:10px; font-size:1rem; font-weight:600; }
+        .bar button:disabled { opacity:.5; }
+        .flash { margin:.75rem; padding:.6rem .8rem; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:10px; }
+        .empty { padding:2rem 1rem; text-align:center; color:var(--muted); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ tenant.name }}</h1>
+        {% if table %}<span class="table-tag">Table {{ table }}</span>{% endif %}
+    </header>
+
+    {% with messages = get_flashed_messages() %}
+        {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('order.submit_order', tenant_id=tenant.id) }}" id="orderForm">
+        {{ csrf_field() }}
+        <input type="hidden" name="table" value="{{ table }}">
+
+        {% if products %}
+        <div class="items">
+            {% for product in products %}
+            <div class="item">
+                <div class="info">
+                    <div class="name">{{ product.name }}</div>
+                    <div class="price">{{ product.price|php }}</div>
+                    {% set variants = variants_by_product.get(product.id) %}
+                    {% if variants %}
+                    <select name="variant_{{ product.id }}">
+                        {% for v in variants %}<option value="{{ v.id }}">{{ v.name }} — {{ v.price|php }}</option>{% endfor %}
+                    </select>
+                    {% endif %}
+                </div>
+                <div class="stepper">
+                    <button type="button" aria-label="decrease" data-step="-1" data-target="qty_{{ product.id }}">−</button>
+                    <input type="number" name="qty_{{ product.id }}" id="qty_{{ product.id }}" value="0" min="0"
+                           inputmode="numeric" data-price="{{ product.price }}" class="qty">
+                    <button type="button" aria-label="increase" data-step="1" data-target="qty_{{ product.id }}">+</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="details">
+            <input type="text" name="guest_name" placeholder="Your name" required autocomplete="name">
+            <input type="tel" name="guest_phone" placeholder="Mobile number" required autocomplete="tel">
+            <textarea name="notes" rows="2" placeholder="Notes (optional)"></textarea>
+        </div>
+        {% else %}
+        <div class="empty">This store has no items available right now.</div>
+        {% endif %}
+
+        <div class="bar">
+            <span class="total">₱<span id="totalAmount">0.00</span></span>
+            <button type="submit" id="placeBtn" disabled>Place order</button>
+        </div>
+    </form>
+
+    <script>
+        (function () {
+            var qtys = Array.prototype.slice.call(document.querySelectorAll('input.qty'));
+            var totalEl = document.getElementById('totalAmount');
+            var placeBtn = document.getElementById('placeBtn');
+            function recompute() {
+                var total = 0, count = 0;
+                qtys.forEach(function (el) {
+                    var q = parseInt(el.value, 10) || 0;
+                    if (q < 0) { q = 0; el.value = 0; }
+                    total += q * (parseFloat(el.getAttribute('data-price')) || 0);
+                    count += q;
+                });
+                totalEl.textContent = total.toFixed(2);
+                placeBtn.disabled = count === 0;
+            }
+            document.querySelectorAll('.stepper button').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var input = document.getElementById(btn.getAttribute('data-target'));
+                    var next = (parseInt(input.value, 10) || 0) + parseInt(btn.getAttribute('data-step'), 10);
+                    input.value = Math.max(0, next);
+                    recompute();
+                });
+            });
+            qtys.forEach(function (el) { el.addEventListener('input', recompute); });
+            recompute();
+        })();
+    </script>
+</body>
+</html>

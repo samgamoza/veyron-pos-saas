@@ -4,12 +4,13 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, flash, redirect, request, send_file, session, url_for
+from flask import Flask, Response, abort, flash, redirect, request, send_file, session, url_for
 
 from app.core.auth import login_required
 from app.core.constants import ALLOWED_IMAGE_EXTENSIONS
 from app.core.db import get_connection
 from app.core.locations import LocationService
+from app.core.qrcodes import render_qr_svg
 from app.core.promotions import PromotionError, PromotionService
 from app.core.flask_config import BACKUP_DIR, DATABASE, DATABASE_ENGINE, DEFAULT_APP_SETTINGS
 from app.modules.users.decorators import roles_required
@@ -77,6 +78,21 @@ def register_owner_routes(app: Flask) -> None:
         except (ValueError, TypeError) as exc:
             flash(str(exc), "error")
         return redirect(url_for("owner_dashboard"))
+
+    @app.route("/owner/qr.svg")
+    @login_required("owner")
+    def owner_qr_svg():
+        tenant_id = session.get("tenant_id")
+        if not tenant_id:
+            abort(404)
+        table = (request.args.get("table", "") or "").strip()[:40]
+        kwargs: dict[str, object] = {"tenant_id": int(tenant_id), "_external": True}
+        if table:
+            kwargs["table"] = table
+        order_url = url_for("order.order_page", **kwargs)
+        svg = render_qr_svg(order_url)
+        # inline so a browser "Save image as" keeps the crisp vector.
+        return Response(svg, mimetype="image/svg+xml")
 
     @app.route("/owner/promotions/add", methods=["POST"])
     @login_required("owner")
@@ -192,6 +208,7 @@ def register_owner_routes(app: Flask) -> None:
             "loyalty_enabled": "1" if request.form.get("loyalty_enabled") else "0",
             "loyalty_earn_rate": _clean_rate("loyalty_earn_rate", DEFAULT_APP_SETTINGS["loyalty_earn_rate"]),
             "loyalty_redeem_rate": _clean_rate("loyalty_redeem_rate", DEFAULT_APP_SETTINGS["loyalty_redeem_rate"]),
+            "qr_ordering_enabled": "1" if request.form.get("qr_ordering_enabled") else "0",
             "auto_print_receipt": "1" if request.form.get("auto_print_receipt") else "0",
             "cash_drawer_enabled": "1" if request.form.get("cash_drawer_enabled") else "0",
             "printer_mode": request.form.get("printer_mode", "browser").strip() or "browser",

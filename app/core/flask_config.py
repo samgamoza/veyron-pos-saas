@@ -100,6 +100,8 @@ DEFAULT_APP_SETTINGS = {
     "loyalty_enabled": "0",
     "loyalty_earn_rate": "1",
     "loyalty_redeem_rate": "1",
+    # QR scan-to-order page enabled for this merchant (on by default).
+    "qr_ordering_enabled": "1",
 }
 DEFAULT_USERS = [
     {"full_name": "Super Admin", "username": "superadmin", "role": "super_admin", "pin": "superadmin123"},

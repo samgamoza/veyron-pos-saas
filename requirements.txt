@@ -5,3 +5,4 @@ flask-wtf>=1.2
 gunicorn
 psycopg[binary]
 python-dotenv
+qrcode

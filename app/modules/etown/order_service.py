@@ -48,6 +48,28 @@ class MarketplaceOrderService:
             ).fetchone()
         return dict(row) if row else None
 
+    def get_orderable_tenant(self, tenant_id: int) -> dict[str, Any] | None:
+        """Tenant lookup for scan-to-order — works for ANY active merchant.
+
+        Unlike get_tenant_public this does not require marketplace opt-in; the
+        merchant's own QR ordering page is gated only by being active and having
+        the ``qr_ordering_enabled`` setting on (default on).
+        """
+        with get_raw_connection() as connection:
+            row = connection.execute(
+                "SELECT id, name, subdomain FROM tenants WHERE id = ? AND is_active = 1",
+                (tenant_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            setting = connection.execute(
+                "SELECT value FROM app_settings WHERE tenant_id = ? AND key = 'qr_ordering_enabled'",
+                (tenant_id,),
+            ).fetchone()
+        if setting is not None and str(setting["value"]).strip() == "0":
+            return None
+        return dict(row)
+
     def list_public_products(self, tenant_id: int) -> list[dict[str, Any]]:
         with get_raw_connection() as connection:
             rows = connection.execute(
@@ -152,6 +174,7 @@ class MarketplaceOrderService:
         delivery_notes: str = "",
         customer_phone: str | None = None,
         customer_full_name: str | None = None,
+        require_marketplace: bool = True,
     ) -> int:
         if not lines:
             raise ValueError("Cart is empty.")
@@ -173,7 +196,8 @@ class MarketplaceOrderService:
             ).fetchone()
             if tenant is None:
                 raise ValueError("Store not found.")
-            if not int(tenant["marketplace_enabled"] or 0):
+            # eTown marketplace requires opt-in; a merchant's own QR order page does not.
+            if require_marketplace and not int(tenant["marketplace_enabled"] or 0):
                 raise ValueError("This store is not on the marketplace.")
 
             resolved: list[dict[str, Any]] = []

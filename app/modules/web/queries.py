@@ -1314,10 +1314,18 @@ def fetch_inventory_context() -> dict[str, object]:
 def fetch_owner_context() -> dict[str, object]:
     from app.core.subscription import entitlements as sub_entitlements
 
+    from flask import url_for
+
     from app.core.locations import LocationService
     from app.core.promotions import PromotionService
 
     tenant_id = session.get("tenant_id")
+    order_url = ""
+    if tenant_id:
+        try:
+            order_url = url_for("order.order_page", tenant_id=int(tenant_id), _external=True)
+        except Exception:
+            order_url = ""
     tenant_plan: dict[str, object] = {}
     demo_limits: dict[str, object] | None = None
     locations: list[dict[str, object]] = []
@@ -1352,6 +1360,7 @@ def fetch_owner_context() -> dict[str, object]:
         "demo_limits": demo_limits,
         "locations": locations,
         "promotions": promotions,
+        "order_url": order_url,
     }
 
 
