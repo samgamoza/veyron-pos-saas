@@ -11,6 +11,7 @@ from app.core.rate_limit import limiter
 from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.helpers import normalize_lookup_name
 from app.core.localization import localization_service
+from app.core.tenant.context import sync_tenant_context_from_session
 from app.core.tenant.tenant_service import TenantService
 from app.core.user_service import user_service
 from app.modules.web import queries as web_queries
@@ -33,6 +34,7 @@ def register_auth_routes(app: Flask) -> None:
                 session["is_super_admin"] = user["role"] == "super_admin"
                 session.pop("reauth_at", None)
                 session.pop("reauth_user_id", None)
+                sync_tenant_context_from_session()
                 language = user["language_override"]
                 if not language and session.get("tenant_id"):
                     with get_connection() as connection:
@@ -128,6 +130,7 @@ def register_auth_routes(app: Flask) -> None:
                 session["user_id"] = user_row["id"]
                 session["tenant_id"] = tenant_id
                 session["is_super_admin"] = False
+                sync_tenant_context_from_session()
                 plat_lang = web_queries.get_platform_setting("platform_default_language")
                 session["language"] = localization_service.normalize_locale(plat_lang)
                 session.pop("reauth_at", None)

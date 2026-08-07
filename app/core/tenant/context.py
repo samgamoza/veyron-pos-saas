@@ -15,6 +15,20 @@ def current_tenant_id() -> int | None:
     return getattr(g, "tenant_id", None)
 
 
+def sync_tenant_context_from_session() -> None:
+    """Refresh ``g.tenant_id`` from the session mid-request.
+
+    ``g.tenant_id`` is normally set once by the ``before_request`` hook, read
+    from the session as it stood at the *start* of the request. Login and
+    signup mutate ``session["tenant_id"]`` partway through handling their own
+    request, so without this, any DB write later in that same request (e.g.
+    an audit log insert) still carries the pre-login tenant context and gets
+    rejected by RLS. Call this immediately after establishing a new
+    session identity, before any further ``get_connection()`` use.
+    """
+    g.tenant_id = session.get("tenant_id")
+
+
 def current_tenant() -> Tenant | None:
     return getattr(g, "tenant", None)
 
