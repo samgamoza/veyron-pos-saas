@@ -91,7 +91,7 @@ def register_auth_routes(app: Flask) -> None:
                         flash("Username already exists. Please choose a different username.", "error")
                         return render_template("signup.html")
 
-                with get_connection() as connection:
+                with get_raw_connection() as connection:
                     tenant = TenantService(connection).create_tenant(
                         name=business_name,
                         contact_email=contact_email,
@@ -107,7 +107,7 @@ def register_auth_routes(app: Flask) -> None:
                     )
                     tenant_id = tenant.id
 
-                with get_connection() as connection:
+                with get_raw_connection() as connection:
                     user_row = connection.execute(
                         """
                         INSERT INTO users (tenant_id, full_name, username, role, pin_hash, is_active)

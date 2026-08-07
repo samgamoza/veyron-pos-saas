@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.core.pos_profiles import normalize_pos_profile_id
@@ -46,7 +47,16 @@ def trigger_tenant_hooks(tenant: Tenant, event_name: str, payload: Optional[Dict
     if event_name not in _TENANT_HOOKS:
         return
     for hook in _TENANT_HOOKS[event_name]:
-        hook(tenant, payload or {})
+        try:
+            hook(tenant, payload or {})
+        except Exception:
+            # Hooks are best-effort side effects (e.g. storefront provisioning) that
+            # open their own DB connection and so cannot see this tenant's row until
+            # the caller's transaction commits. A hook failure must never roll back
+            # or crash the tenant/account creation that triggered it.
+            logging.getLogger(__name__).exception(
+                "Tenant hook '%s' failed for tenant_id=%s", event_name, tenant.id
+            )
 
 
 class TenantService:
