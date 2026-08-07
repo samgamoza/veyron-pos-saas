@@ -6,3 +6,4 @@ gunicorn
 psycopg[binary]
 python-dotenv
 qrcode
+redis

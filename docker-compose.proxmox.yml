@@ -1,0 +1,29 @@
+# Overlay for deployment behind a public domain (Proxmox, any VPS): adds Caddy as a
+# reverse proxy with automatic HTTPS. Does not modify the base app/db/redis services.
+#
+# Usage:
+#   DOMAIN=pos-test.yourdomain.com   # in .env
+#   docker compose -f docker-compose.yml -f docker-compose.proxmox.yml up -d --build
+#
+# Requires: a DNS A record for $DOMAIN pointing at this host's public IP, and ports
+# 80 + 443 reachable from the internet (open in the Proxmox/host firewall).
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env, e.g. pos-test.yourdomain.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,9 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt, HTTP-01 challenge).
+# Works with any DNS provider — just point an A record at this host's public IP.
+# No wildcard, no DNS API keys needed. Sufficient for POS, QR ordering, and the
+# eTown marketplace (all path-based). Wildcard DNS is only needed later if you
+# want to test the separate subdomain-based "storefront" branded-page feature.
+
+{$DOMAIN} {
+    reverse_proxy app:8000
+}
