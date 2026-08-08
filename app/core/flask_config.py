@@ -27,7 +27,10 @@ PLACEHOLDER_MAP = {
     "beverages": "images/products/placeholder-beverage.svg",
 }
 DEFAULT_PLACEHOLDER = "images/products/placeholder-default.svg"
-BUSINESS_NAME = "Veyron's Cakes and Pastries"
+# Product branding, shown wherever there is no tenant context (login, signup).
+# Once a merchant signs in, their own `g.tenant.name` is displayed instead, so
+# this is the pre-auth product name — not any one merchant's business name.
+BUSINESS_NAME = os.getenv("BUSINESS_NAME", "Veyron POS")
 CURRENCY_CODE = "PHP"
 # Legacy fallback only. Real VAT is per-tenant via app_settings — see app/core/tax.py
 # (`vat_rate`, `vat_inclusive`, `vat_registered`).
