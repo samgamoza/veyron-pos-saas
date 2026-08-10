@@ -9,8 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    {% include 'partials/brand_tokens.html' %}
     <style>
-        :root{--accent:{{ brand_primary }};--accent-strong:{{ brand_primary }};--warning:{{ brand_accent }};}
         .tenant-dashboard-hero{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,transparent),color-mix(in srgb,var(--warning) 8%,transparent));border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}
         .tenant-dashboard-hero h2{font-size:1.15rem;margin:0 0 .35rem;}
         .tenant-pills{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;}

@@ -379,17 +379,21 @@ button {
 
 .flash-card {
     padding: 1rem 1.2rem;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid rgba(181, 74, 47, 0.16);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface-strong, #fff) 92%, transparent);
+    border: 1px solid var(--line);
 }
 
 .flash-card.error {
     color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+    background: var(--warning-soft);
 }
 
 .flash-card.success {
     color: var(--success);
+    border-color: color-mix(in srgb, var(--success) 35%, transparent);
+    background: color-mix(in srgb, var(--success) 10%, #fff);
 }
 
 .workspace-grid {

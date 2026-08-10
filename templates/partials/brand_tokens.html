@@ -1,0 +1,15 @@
+{# Tenant brand → CSS tokens used by style.css + admin_ui.css #}
+<style>
+  :root {
+    --accent: {{ brand_primary|default('#0f6a5d') }};
+    --accent-strong: color-mix(in srgb, {{ brand_primary|default('#0f6a5d') }} 78%, #000);
+    --accent-soft: color-mix(in srgb, {{ brand_primary|default('#0f6a5d') }} 14%, #fff);
+    --warning: {{ brand_accent|default('#b54a2f') }};
+    --warning-soft: color-mix(in srgb, {{ brand_accent|default('#b54a2f') }} 12%, #fff);
+    --ui-grad: linear-gradient(
+      135deg,
+      {{ brand_primary|default('#0f6a5d') }},
+      color-mix(in srgb, {{ brand_primary|default('#0f6a5d') }} 72%, #000)
+    );
+  }
+</style>

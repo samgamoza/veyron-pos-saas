@@ -1,26 +1,30 @@
+/* Admin / app chrome — driven by brand tokens from style.css + brand_tokens partial. */
 :root {
-    --ui-bg: #f5f7fb;
-    --ui-surface: #ffffff;
-    --ui-border: #e9edf5;
-    --ui-text: #1f2937;
-    --ui-muted: #6b7280;
-    --ui-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-    --ui-grad: linear-gradient(135deg, #1550d3, #1a2fb8);
+    --ui-bg: var(--bg, #faf1e6);
+    --ui-surface: var(--surface-strong, #fff8ef);
+    --ui-border: var(--line, rgba(33, 25, 16, 0.1));
+    --ui-text: var(--ink, #211910);
+    --ui-muted: var(--muted, #6f5a47);
+    --ui-shadow: var(--shadow, 0 16px 40px rgba(104, 67, 24, 0.12));
+    --ui-grad: linear-gradient(
+        135deg,
+        var(--accent, #0f6a5d),
+        var(--accent-strong, #0a4c43)
+    );
 }
 
 html[data-theme="dark"] {
-    --ui-bg: #0f172a;
-    --ui-surface: #111827;
-    --ui-border: #243046;
-    --ui-text: #e5e7eb;
-    --ui-muted: #9ca3af;
-    --ui-shadow: 0 12px 36px rgba(2, 6, 23, 0.5);
+    --ui-bg: #12161c;
+    --ui-surface: #1a212b;
+    --ui-border: rgba(255, 255, 255, 0.1);
+    --ui-text: #e8e6e1;
+    --ui-muted: #9aa3b2;
+    --ui-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
 }
 
 body {
     background: var(--ui-bg);
     color: var(--ui-text);
-    font-family: "Open Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
 .page-wrap {
@@ -37,9 +41,9 @@ body {
 .login-card,
 .checkout-panel,
 .catalog-panel {
-    background: var(--ui-surface) !important;
-    border: 1px solid var(--ui-border) !important;
-    border-radius: 16px !important;
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: 16px;
     box-shadow: var(--ui-shadow);
 }
 
@@ -49,14 +53,14 @@ body {
     position: sticky;
     top: 0.75rem;
     z-index: 20;
-    background: var(--ui-grad) !important;
+    background: var(--ui-grad);
     color: #fff;
 }
 
 .site-header h1,
 .site-header .eyebrow,
 .site-header .system-pill {
-    color: #fff !important;
+    color: #fff;
 }
 
 .header-nav .ghost-link,
@@ -71,18 +75,18 @@ body {
 
 .header-nav .ghost-link:hover,
 .small-action:hover {
-    background: rgba(59, 130, 246, 0.08);
+    background: color-mix(in srgb, var(--accent, #0f6a5d) 10%, transparent);
 }
 
 .site-header .ghost-link,
 .site-header .pos-launch-link {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.28);
     color: #fff;
 }
 
 .site-header .ghost-link:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.22);
 }
 
 .primary-button,
@@ -92,7 +96,23 @@ button[type="submit"].primary-button {
     padding: 0.6rem 1rem;
     font-weight: 600;
     background: var(--ui-grad);
-    color: #fff !important;
+    color: #fff;
+}
+
+.primary-button:hover,
+button[type="submit"].primary-button:hover {
+    filter: brightness(1.05);
+}
+
+.primary-button:focus-visible,
+.ghost-link:focus-visible,
+.admin-nav-link:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--accent, #0f6a5d);
+    outline-offset: 2px;
 }
 
 .admin-nav-link {
@@ -107,8 +127,8 @@ button[type="submit"].primary-button {
 }
 
 .admin-nav-link.active {
-    background: #2453d4;
-    border-color: #2453d4;
+    background: var(--accent, #0f6a5d);
+    border-color: var(--accent, #0f6a5d);
     color: #fff;
 }
 
@@ -149,7 +169,7 @@ button[type="submit"].primary-button {
     width: 72px;
     height: 72px;
     border-radius: 999px;
-    background: rgba(36, 83, 212, 0.1);
+    background: color-mix(in srgb, var(--accent, #0f6a5d) 12%, transparent);
 }
 
 .table-shell {
@@ -173,10 +193,10 @@ button[type="submit"].primary-button {
 input,
 select,
 textarea {
-    border-radius: 10px !important;
-    border: 1px solid var(--ui-border) !important;
-    background: var(--ui-surface) !important;
-    color: var(--ui-text) !important;
+    border-radius: 10px;
+    border: 1px solid var(--ui-border);
+    background: var(--ui-surface);
+    color: var(--ui-text);
 }
 
 .flash-card {
@@ -184,8 +204,8 @@ textarea {
 }
 
 .status-chip {
-    border-radius: 999px !important;
-    padding: 0.2rem 0.6rem !important;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
     font-size: 0.78rem;
     font-weight: 700;
 }
@@ -244,7 +264,10 @@ textarea {
 }
 
 .auth-body {
-    background: radial-gradient(circle at 15% 10%, rgba(26, 47, 184, 0.2), transparent 35%), var(--ui-bg);
+    background:
+        radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--accent, #0f6a5d) 22%, transparent), transparent 35%),
+        radial-gradient(circle at 85% 90%, color-mix(in srgb, var(--warning, #b54a2f) 14%, transparent), transparent 40%),
+        var(--ui-bg);
 }
 
 .login-shell-modern {
@@ -261,7 +284,7 @@ textarea {
 
 .auth-hero-panel {
     border-radius: 16px;
-    border: 1px solid var(--ui-border);
+    border: 1px solid color-mix(in srgb, var(--accent, #0f6a5d) 30%, transparent);
     background: var(--ui-grad);
     color: #fff;
     padding: 1.5rem;
@@ -271,7 +294,14 @@ textarea {
 .auth-hero-panel .eyebrow,
 .auth-hero-panel .hero-text,
 .auth-hero-panel .login-title {
-    color: #fff !important;
+    color: #fff;
+}
+
+.auth-hero-panel .brand-logo {
+    filter: none;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 12px;
+    padding: 0.35rem 0.5rem;
 }
 
 .auth-feature-list {
@@ -289,7 +319,93 @@ textarea {
 
 .auth-form-panel {
     max-width: none;
-    padding: 1.2rem;
+    padding: 1.4rem 1.35rem 1.5rem;
+}
+
+.pin-field {
+    display: flex;
+    align-items: stretch;
+    gap: 0.45rem;
+}
+
+.pin-field input {
+    flex: 1;
+}
+
+.pin-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    border-radius: 10px;
+    border: 1px solid var(--ui-border);
+    background: color-mix(in srgb, var(--accent, #0f6a5d) 8%, var(--ui-surface));
+    color: var(--ui-text);
+}
+
+.pin-toggle:hover {
+    background: color-mix(in srgb, var(--accent, #0f6a5d) 14%, var(--ui-surface));
+}
+
+.auth-demo-details {
+    margin-top: 1rem;
+    border: 1px solid var(--ui-border);
+    border-radius: 12px;
+    padding: 0.65rem 0.85rem;
+    background: color-mix(in srgb, var(--accent, #0f6a5d) 5%, var(--ui-surface));
+}
+
+.auth-demo-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ui-muted);
+    list-style: none;
+}
+
+.auth-demo-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.auth-demo-details summary::before {
+    content: "▸ ";
+    color: var(--accent, #0f6a5d);
+}
+
+.auth-demo-details[open] summary::before {
+    content: "▾ ";
+}
+
+.auth-demo-details .login-hint-grid {
+    margin-top: 0.75rem;
+}
+
+.auth-secondary-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+
+.auth-secondary-links .ghost-link,
+.auth-secondary-links .primary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.9rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.auth-secondary-links .ghost-link {
+    border: 1px solid var(--ui-border);
+    color: var(--ui-text);
+    background: transparent;
+}
+
+.auth-secondary-links .ghost-link:hover {
+    background: color-mix(in srgb, var(--accent, #0f6a5d) 8%, transparent);
 }
 
 @media (max-width: 992px) {

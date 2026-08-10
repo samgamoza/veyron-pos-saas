@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
-    <style>:root{--accent:{{ brand_primary }};--accent-strong:{{ brand_primary }};--warning:{{ brand_accent }};}</style>
+    {% include 'partials/brand_tokens.html' %}
     <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
 </head>
 <body class="receipt-body">
