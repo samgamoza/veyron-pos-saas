@@ -61,6 +61,11 @@ def place_order(tenant_id: int):
     if tenant is None:
         abort(404)
     lines = _parse_order_lines(request.form)
+    delivery_line1 = (request.form.get("delivery_line1", "") or "").strip()
+    delivery_line2 = (request.form.get("delivery_line2", "") or "").strip()
+    delivery_city = (request.form.get("delivery_city", "") or "").strip()
+    delivery_notes = (request.form.get("delivery_notes", "") or "").strip()
+    delivery_requested = bool(delivery_line1.strip() and delivery_city.strip())
     try:
         order_id = _service.create_order(
             tenant_id,
@@ -68,14 +73,36 @@ def place_order(tenant_id: int):
             guest_name=request.form.get("guest_name", ""),
             guest_phone=request.form.get("guest_phone", ""),
             notes=request.form.get("notes", ""),
-            delivery_line1=request.form.get("delivery_line1", ""),
-            delivery_line2=request.form.get("delivery_line2", ""),
-            delivery_city=request.form.get("delivery_city", ""),
-            delivery_notes=request.form.get("delivery_notes", ""),
+            delivery_line1=delivery_line1,
+            delivery_line2=delivery_line2,
+            delivery_city=delivery_city,
+            delivery_notes=delivery_notes,
         )
     except ValueError as exc:
         flash(str(exc), "error")
         return redirect(url_for("etown.shop", tenant_id=tenant_id))
+
+    if delivery_requested:
+        order = _service.get_order_public(tenant_id, order_id)
+        order_total = float(order["total"]) if order else 0.0
+        try:
+            from app.core.delivery.integration_service import DeliveryIntegrationService
+
+            DeliveryIntegrationService().create_online_delivery_if_requested(
+                tenant_id,
+                order_id,
+                delivery_requested=True,
+                delivery_line1=delivery_line1,
+                delivery_line2=delivery_line2,
+                delivery_city=delivery_city,
+                delivery_notes=delivery_notes,
+                order_total=order_total,
+            )
+        except Exception as exc:
+            flash(f"Order placed, but rider delivery could not be scheduled: {exc}", "warning")
+            flash(f"Order placed. Reference #{order_id}. The store will contact you to confirm.", "success")
+            return redirect(url_for("etown.shop", tenant_id=tenant_id))
+
     flash(f"Order placed. Reference #{order_id}. The store will contact you to confirm.", "success")
     return redirect(url_for("etown.shop", tenant_id=tenant_id))
 

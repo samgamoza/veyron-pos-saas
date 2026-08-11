@@ -16,7 +16,7 @@
 <div class="page-wrap">
     <header class="site-header">
         <div class="header-brand">
-            <img src="{{ url_for('static', filename=logo_path) }}" alt="{{ business_name }} logo" class="brand-logo">
+            <img src="{{ url_for('static', filename=logo_mark_path) }}" alt="{{ business_name }} logo" class="brand-logo">
             <div>
                 <p class="eyebrow">Owner</p>
                 <h1>{{ business_name }}</h1>
@@ -26,6 +26,7 @@
             <a href="{{ url_for('subscription_plans') }}" class="ghost-link">Plans</a>
             <a href="{{ url_for('admin_dashboard') }}" class="ghost-link">Admin</a>
             <a href="{{ url_for('inventory_dashboard') }}" class="ghost-link">Inventory</a>
+            <a href="{{ url_for('admin_marketplace_orders') }}" class="ghost-link">Online orders</a>
             <a href="{{ url_for('pos') }}" class="pos-launch-link ghost-link">POS</a>
             <span class="system-pill">{{ current_user.full_name }}</span>
             <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
@@ -38,6 +39,7 @@
                 <a href="#oversight" class="admin-nav-link active"><i class="bi bi-speedometer2 me-2"></i>Oversight</a>
                 <a href="#alerts" class="admin-nav-link"><i class="bi bi-bell me-2"></i>Alerts</a>
                 <a href="#backups" class="admin-nav-link"><i class="bi bi-cloud-arrow-down me-2"></i>Backups</a>
+                <a href="#qr-ordering" class="admin-nav-link"><i class="bi bi-qr-code me-2"></i>QR ordering</a>
                 <a href="#settings" class="admin-nav-link"><i class="bi bi-hdd-stack me-2"></i>Hardware</a>
                 <a href="#branding" class="admin-nav-link"><i class="bi bi-palette me-2"></i>Branding</a>
                 <a href="#audit" class="admin-nav-link"><i class="bi bi-journal-check me-2"></i>Audit Trail</a>
@@ -63,7 +65,21 @@
                     Products: <strong>{{ demo_limits.products_used }} / {{ demo_limits.max_products }}</strong>
                     — Completed sales this month: <strong>{{ demo_limits.sales_this_month }} / {{ demo_limits.max_sales_month }}</strong>
                 </p>
+                {% if tenant_plan.subscription_status == 'pending' and tenant_plan.pending_plan_name %}
+                <p class="small mb-2"><strong>Pending upgrade:</strong> {{ tenant_plan.pending_plan_name|title }} ({{ tenant_plan.billing_currency or 'PHP' }} {{ tenant_plan.pending_plan_fee|round|int }}/mo) — awaiting platform approval.</p>
+                {% else %}
                 <a href="{{ url_for('subscription_plans') }}" class="btn btn-sm btn-primary">View paid plans &amp; unlock full limits</a>
+                {% endif %}
+            </section>
+            {% elif tenant_plan.subscription_status == 'pending' and tenant_plan.pending_plan_name %}
+            <section class="dashboard-panel mb-4" style="border-left: 4px solid var(--accent, #0f6a5d);">
+                <p class="eyebrow mb-1">Plan upgrade</p>
+                <h2 class="h5 mb-2">Awaiting platform approval</h2>
+                <p class="small text-muted mb-0">
+                    You requested <strong>{{ tenant_plan.pending_plan_name|title }}</strong>
+                    ({{ tenant_plan.billing_currency or 'PHP' }} {{ tenant_plan.pending_plan_fee|round|int }}/mo).
+                    Your current <strong>{{ tenant_plan.plan_name|title }}</strong> plan stays active until payment is confirmed.
+                </p>
             </section>
             {% endif %}
 
@@ -324,10 +340,19 @@
                 <div class="section-heading">
                     <div>
                         <p class="eyebrow">Easy ordering</p>
-                        <h2>QR scan-to-order</h2>
+                        <h2>QR scan-to-order{% if qr_plan_access.show_qr_locked %} <span class="nav-lock-badge"><i class="bi bi-lock-fill"></i></span>{% elif qr_plan_access.show_qr_teaser %} <span class="nav-lock-badge">Demo</span>{% endif %}</h2>
                     </div>
                 </div>
+                {% if qr_plan_access.show_qr_locked %}
+                {% with title='QR ordering on Growth', message='Let customers scan a code to browse your menu and order from their phone — no app needed. Starter includes in-store POS; online QR ordering unlocks on Growth.', show_teaser_hint=false, plan_access=qr_plan_access %}
+                    {% include 'partials/plan_upgrade_gate.html' %}
+                {% endwith %}
+                {% else %}
                 <p class="text-muted">Print this QR at your counter or on each table. Customers scan it to view your menu and place an order on their phone — no app needed.</p>
+                {% if qr_plan_access.show_qr_teaser %}
+                <p class="panel-note"><strong>Demo limit.</strong> Up to <strong>{{ qr_plan_access.online_orders_max }}</strong> online orders per month
+                    ({{ qr_plan_access.online_orders_used }} used). Upgrade to <strong>Growth (PHP {{ qr_plan_access.upgrade_price_hint }}/mo)</strong> for unlimited QR ordering.</p>
+                {% endif %}
                 <div style="display:flex; flex-wrap:wrap; gap:1.25rem; align-items:flex-start;">
                     <div style="background:#fff; padding:.75rem; border:1px solid var(--line, #e5e7eb); border-radius:12px;">
                         <img id="qrImage" src="{{ url_for('owner_qr_svg') }}" alt="Ordering QR code" width="200" height="200" style="display:block;">
@@ -339,10 +364,15 @@
                         <label style="margin-top:.5rem; display:block;">Table number (optional — makes a per-table QR)
                             <input type="text" id="qrTable" placeholder="e.g. 5" maxlength="40">
                         </label>
-                        <div style="margin-top:.6rem; display:flex; gap:.5rem;">
+                        <div style="margin-top:.6rem; display:flex; gap:.5rem; flex-wrap:wrap;">
                             <button type="button" class="ghost-link small-action" onclick="updateQr()">Update QR</button>
                             <a id="qrDownload" href="{{ url_for('owner_qr_svg') }}" download="ordering-qr.svg" class="ghost-link small-action">Download</a>
+                            <a href="{{ url_for('admin_marketplace_orders') }}" class="ghost-link small-action">View online orders</a>
                         </div>
+                        <label class="toggle-row" style="margin-top:.75rem;">
+                            <input type="checkbox" name="qr_ordering_enabled" value="1" form="owner-settings-form" {% if settings.get('qr_ordering_enabled', '1') == '1' %}checked{% endif %}>
+                            <span>Enable public QR order page</span>
+                        </label>
                     </div>
                 </div>
                 <script>
@@ -356,6 +386,7 @@
                         dl.setAttribute('download', t ? 'ordering-qr-table-' + t + '.svg' : 'ordering-qr.svg');
                     }
                 </script>
+                {% endif %}
             </section>
 
             <section class="dashboard-panel" id="promotions">
@@ -412,12 +443,8 @@
                         <h2>Receipt and drawer settings</h2>
                     </div>
                 </div>
-                <form method="post" action="{{ url_for('save_settings') }}" class="settings-grid">
+                <form method="post" action="{{ url_for('save_settings') }}" class="settings-grid" id="owner-settings-form">
                     {{ csrf_field() }}
-                    <label class="toggle-row">
-                        <input type="checkbox" name="qr_ordering_enabled" value="1" {% if settings.get('qr_ordering_enabled', '1') == '1' %}checked{% endif %}>
-                        <span>Enable QR scan-to-order page</span>
-                    </label>
                     <label class="toggle-row">
                         <input type="checkbox" name="loyalty_enabled" value="1" {% if settings.get('loyalty_enabled', '0') == '1' %}checked{% endif %}>
                         <span>Enable loyalty points</span>

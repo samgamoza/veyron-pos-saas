@@ -16,6 +16,48 @@
         .tenant-pills{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;}
         .tenant-pill{font-size:.78rem;padding:.25rem .65rem;border-radius:999px;background:#fff;border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent-strong);}
         [data-theme="dark"] .tenant-pill{background:#1e293b;border-color:#334155;color:#e2e8f0;}
+        .nav-lock-badge{font-size:.65rem;margin-left:.35rem;opacity:.75;}
+        .plan-gate-panel{
+            border:1px dashed color-mix(in srgb,var(--accent) 28%,transparent);
+            border-radius:14px;
+            padding:1.35rem 1.25rem;
+            text-align:center;
+            background:color-mix(in srgb,var(--accent) 5%,var(--surface-strong,#fff8ef));
+        }
+        .plan-gate-panel h3{font-size:1.05rem;margin:0 0 .45rem;}
+        .plan-gate-icon{font-size:1.5rem;color:var(--accent);margin-bottom:.35rem;}
+        .plan-gate-actions{display:flex;flex-direction:column;align-items:center;gap:.55rem;margin-top:.85rem;}
+        .plan-gate-teaser{font-size:.82rem;color:var(--muted);margin:.35rem 0 0;}
+        .plan-teaser-banner{
+            border:1px solid color-mix(in srgb,var(--warning) 35%,transparent);
+            background:color-mix(in srgb,var(--warning) 10%,#fff);
+            border-radius:12px;
+            padding:.75rem 1rem;
+            margin-bottom:1rem;
+            font-size:.88rem;
+        }
+        .wizard-shell{display:flex;flex-direction:column;gap:1rem;}
+        .wizard-product-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.55rem;}
+        .wiz-product-tabs{display:flex;flex-wrap:wrap;gap:.35rem;flex:1;}
+        .wiz-product-tab{
+            display:inline-flex;align-items:center;gap:.35rem;
+            border:1px solid var(--line);border-radius:999px;
+            padding:.35rem .75rem;background:var(--surface);
+            cursor:pointer;font-size:.82rem;
+        }
+        .wiz-product-tab.is-active{
+            border-color:var(--accent);
+            background:color-mix(in srgb,var(--accent) 12%,transparent);
+        }
+        .wiz-product-tab-remove{
+            border:none;background:transparent;padding:0;line-height:1;
+            color:var(--muted);cursor:pointer;font-size:.75rem;
+        }
+        .wiz-product-panel{display:none;}
+        .wiz-product-panel.is-active{display:grid;}
+        .wiz-product-limit{font-size:.82rem;color:var(--muted);}
+        .wiz-product-name-wrap{display:flex;flex-direction:column;gap:.2rem;font-size:.82rem;font-weight:500;color:var(--muted);margin-bottom:.25rem;}
+        .wizard-layout.is-locked{display:none;}
     </style>
     <script>document.documentElement.dataset.theme=localStorage.getItem('veyron-theme')||'light';</script>
 </head>
@@ -23,7 +65,7 @@
 <div class="page-wrap">
     <header class="site-header">
         <div class="header-brand">
-            <img src="{{ url_for('static', filename=logo_path) }}" alt="{{ business_name }} logo" class="brand-logo">
+            <img src="{{ url_for('static', filename=logo_mark_path) }}" alt="{{ business_name }} logo" class="brand-logo">
             <div>
                 <p class="eyebrow">Inventory</p>
                 <h1>{{ business_name }}</h1>
@@ -50,8 +92,8 @@
                 <button type="button" class="collapsible admin-nav-link" data-target="purchase-orders"><i class="bi bi-receipt me-2"></i>Purchase Orders</button>
                 <button type="button" class="collapsible admin-nav-link" data-target="stock-counts"><i class="bi bi-clipboard-check me-2"></i>Stock Counts</button>
                 <button type="button" class="collapsible admin-nav-link" data-target="sales-controls"><i class="bi bi-arrow-counterclockwise me-2"></i>Refunds / Voids</button>
-                <button type="button" class="collapsible admin-nav-link" data-target="reports"><i class="bi bi-bar-chart me-2"></i>Reports</button>
-                <button type="button" class="collapsible admin-nav-link" data-target="pricing-wizard"><i class="bi bi-calculator me-2"></i>Pricing Wizard</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="reports"><i class="bi bi-bar-chart me-2"></i>Reports{% if not plan_access.show_inventory_reports %}<span class="nav-lock-badge"><i class="bi bi-lock-fill"></i></span>{% endif %}</button>
+                <button type="button" class="collapsible admin-nav-link" data-target="pricing-wizard"><i class="bi bi-calculator me-2"></i>Pricing Wizard{% if plan_access.show_pricing_wizard_locked %}<span class="nav-lock-badge"><i class="bi bi-lock-fill"></i></span>{% elif plan_access.show_pricing_wizard_teaser %}<span class="nav-lock-badge">Demo</span>{% endif %}</button>
             </nav>
         </aside>
 
@@ -524,6 +566,8 @@
 
             <section class="dashboard-panel admin-section-card" id="reports" data-inventory-section hidden>
                 <div class="section-heading"><div><p class="eyebrow">Reports</p><h2>After-sales inventory reporting</h2></div></div>
+
+                {% if plan_access.show_inventory_reports %}
                 <div class="inventory-summary-grid">
                     <article class="inventory-summary-card"><span>Today revenue</span><strong>{{ reports.summary.today_revenue|php }}</strong></article>
                     <article class="inventory-summary-card"><span>Today receipts</span><strong>{{ reports.summary.today_receipts }}</strong></article>
@@ -542,89 +586,114 @@
                     <article class="dashboard-subpanel"><p class="eyebrow">Monthly</p><h3>Last 12 months</h3><div class="table-shell compact-table admin-table-wrap"><table class="table"><thead><tr><th>Period</th><th>Receipts</th><th>Revenue</th><th>Gross Profit</th><th>Sold</th><th>Stock In</th><th>Stock Out</th></tr></thead><tbody>{% for row in reports.monthly_inventory %}<tr><td>{{ row.period_key }}</td><td>{{ row.receipt_count }}</td><td>{{ row.sales_value|php }}</td><td>{{ row.gross_profit|php }}</td><td>{{ row.units_sold }}</td><td>{{ row.stock_in + row.count_gain }}</td><td>{{ row.stock_out_total }}</td></tr>{% else %}<tr><td colspan="7">No monthly inventory activity yet.</td></tr>{% endfor %}</tbody></table></div></article>
                     <article class="dashboard-subpanel"><p class="eyebrow">Yearly</p><h3>Last years</h3><div class="table-shell compact-table admin-table-wrap"><table class="table"><thead><tr><th>Period</th><th>Receipts</th><th>Revenue</th><th>Gross Profit</th><th>Sold</th><th>Stock In</th><th>Stock Out</th></tr></thead><tbody>{% for row in reports.yearly_inventory %}<tr><td>{{ row.period_key }}</td><td>{{ row.receipt_count }}</td><td>{{ row.sales_value|php }}</td><td>{{ row.gross_profit|php }}</td><td>{{ row.units_sold }}</td><td>{{ row.stock_in + row.count_gain }}</td><td>{{ row.stock_out_total }}</td></tr>{% else %}<tr><td colspan="7">No yearly inventory activity yet.</td></tr>{% endfor %}</tbody></table></div></article>
                 </section>
+                {% else %}
+                {% with title='Inventory reports on Growth', message='See gross profit, period analytics, and stock impact across daily, weekly, monthly, and yearly views. Starter includes POS and stock control; advanced reporting unlocks on Growth.', show_teaser_hint=plan_access.show_pricing_wizard_teaser %}
+                    {% include 'partials/plan_upgrade_gate.html' %}
+                {% endwith %}
+                {% endif %}
             </section>
 
             <section class="dashboard-panel admin-section-card" id="pricing-wizard" data-inventory-section hidden>
                 <div class="section-heading"><div><p class="eyebrow">Tools</p><h2>Pricing Wizard</h2></div></div>
-                <p class="panel-note" style="margin-bottom:1rem;">Calculate the true cost per piece and find the right selling price for your products.</p>
 
-                <div class="wizard-layout">
-                    <div class="wizard-inputs">
-                        <article class="dashboard-subpanel">
-                            <p class="eyebrow">Step 1</p>
-                            <h3>Ingredients</h3>
-                            <div class="table-shell compact-table admin-table-wrap">
-                                <table class="table" id="wiz-ingredients-table">
-                                    <thead><tr><th>Ingredient</th><th>Unit</th><th>Cost / unit</th><th>Qty used</th><th>Line cost</th><th></th></tr></thead>
-                                    <tbody id="wiz-ingredients-body">
-                                        <tr class="wiz-row">
-                                            <td><input type="text" class="wiz-input wiz-name" placeholder="e.g. Flour"></td>
-                                            <td>
-                                                <select class="wiz-input wiz-unit-select">
-                                                    {% for utype, ulabel in [('weight', 'Weight'), ('volume', 'Volume'), ('count', 'Count')] %}
-                                                        {% set group_units = units|selectattr('type', 'equalto', utype)|list %}
-                                                        {% if group_units %}
-                                                        <optgroup label="{{ ulabel }}">
-                                                            {% for unit in group_units %}<option value="{{ unit.symbol }}" data-conversion="{{ unit.conversion }}">{{ unit.symbol }}</option>{% endfor %}
-                                                        </optgroup>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </select>
-                                            </td>
-                                            <td><input type="number" class="wiz-input wiz-unit-cost" min="0" step="0.01" placeholder="0.00"></td>
-                                            <td><input type="number" class="wiz-input wiz-qty" min="0" step="0.01" placeholder="0"></td>
-                                            <td class="wiz-line-cost">PHP 0.00</td>
-                                            <td><button type="button" class="ghost-link small-action danger-action wiz-remove-row">✕</button></td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot><tr><td colspan="4" style="text-align:right;font-weight:600;">Total ingredients cost</td><td id="wiz-total-ingredients" style="font-weight:700;">PHP 0.00</td><td></td></tr></tfoot>
-                                </table>
-                            </div>
-                            <button type="button" class="ghost-link" id="wiz-add-row" style="margin-top:0.5rem;">+ Add ingredient</button>
-                        </article>
+                {% if plan_access.show_pricing_wizard_locked %}
+                {% with title='Recipe costing on Growth', message='Calculate true batch cost, margin, and suggested selling price for bakeries, commissaries, and food shops. Upgrade to Growth for the full wizard and saved workflows (coming soon).', show_teaser_hint=false %}
+                    {% include 'partials/plan_upgrade_gate.html' %}
+                {% endwith %}
+                {% else %}
+                {% if plan_access.show_pricing_wizard_teaser %}
+                <div class="plan-teaser-banner">
+                    <strong>Demo preview.</strong> Cost up to <strong>{{ plan_access.pricing_wizard_max_products }} products</strong> with the full recipe wizard.
+                    Upgrade to <strong>Growth (PHP {{ plan_access.upgrade_price_hint }}/mo)</strong> for unlimited products and inventory reports.
+                    <a href="{{ url_for('subscription_plans') }}" class="ms-1">View plans</a>
+                </div>
+                {% endif %}
+                <p class="panel-note" style="margin-bottom:1rem;">Calculate the true cost per piece and find the right selling price for each product you sell.</p>
 
-                        <article class="dashboard-subpanel">
-                            <p class="eyebrow">Step 2</p>
-                            <h3>Batch &amp; Overhead</h3>
-                            <div class="wizard-fields">
-                                <label>Pieces per batch<input type="number" id="wiz-batch-size" min="1" value="1" class="wiz-input"></label>
-                                <label>Labor cost (per batch)<input type="number" id="wiz-labor" min="0" step="0.01" value="0" class="wiz-input"></label>
-                                <label>Packaging cost (per piece)<input type="number" id="wiz-packaging" min="0" step="0.01" value="0" class="wiz-input"></label>
-                                <label>Utilities / other (per batch)<input type="number" id="wiz-utilities" min="0" step="0.01" value="0" class="wiz-input"></label>
-                            </div>
-                        </article>
-
-                        <article class="dashboard-subpanel">
-                            <p class="eyebrow">Step 3</p>
-                            <h3>Desired Profit Margin</h3>
-                            <div class="wizard-margin-wrap">
-                                <input type="range" id="wiz-margin-slider" min="0" max="80" value="40" class="wiz-slider">
-                                <div class="wizard-margin-display"><span id="wiz-margin-pct">40</span>%</div>
-                            </div>
-                        </article>
+                <div class="wizard-shell" id="pricing-wizard-shell"
+                     data-wizard-mode="{{ plan_access.pricing_wizard }}"
+                     data-max-products="{{ plan_access.pricing_wizard_max_products or '' }}">
+                    <div class="wizard-product-bar">
+                        <div class="wiz-product-tabs" id="wiz-product-tabs" role="tablist" aria-label="Products"></div>
+                        <button type="button" class="ghost-link" id="wiz-add-product">+ Add product</button>
+                        <span class="wiz-product-limit" id="wiz-product-limit" hidden></span>
                     </div>
 
-                    <div class="wizard-results">
-                        <article class="dashboard-subpanel wizard-result-card">
-                            <p class="eyebrow">Results</p>
-                            <h3>Pricing Breakdown</h3>
-                            <div class="wizard-result-grid">
-                                <div class="wiz-result-item"><span>Ingredients / batch</span><strong id="wiz-r-ingredients">PHP 0.00</strong></div>
-                                <div class="wiz-result-item"><span>Labor / batch</span><strong id="wiz-r-labor">PHP 0.00</strong></div>
-                                <div class="wiz-result-item"><span>Utilities / batch</span><strong id="wiz-r-utilities">PHP 0.00</strong></div>
-                                <div class="wiz-result-item"><span>Total batch cost</span><strong id="wiz-r-batch-cost">PHP 0.00</strong></div>
-                                <hr>
-                                <div class="wiz-result-item highlight"><span>Cost per piece</span><strong id="wiz-r-cost-per-piece">PHP 0.00</strong></div>
-                                <div class="wiz-result-item"><span>+ Packaging / piece</span><strong id="wiz-r-packaging">PHP 0.00</strong></div>
-                                <div class="wiz-result-item highlight"><span>Total cost per piece</span><strong id="wiz-r-total-cost-piece">PHP 0.00</strong></div>
-                                <hr>
-                                <div class="wiz-result-item accent"><span>Suggested selling price</span><strong id="wiz-r-sell-price">PHP 0.00</strong></div>
-                                <div class="wiz-result-item accent"><span>Profit per piece</span><strong id="wiz-r-profit-piece">PHP 0.00</strong></div>
-                                <div class="wiz-result-item"><span>Profit per batch</span><strong id="wiz-r-profit-batch">PHP 0.00</strong></div>
+                    <div id="wiz-products-container">
+                        <div class="wiz-product-panel wizard-layout is-active" data-product-index="0">
+                            <div class="wizard-inputs">
+                                <label class="wiz-product-name-wrap">Product name<input type="text" class="wiz-input wiz-product-name" placeholder="e.g. Chocolate Croissant"></label>
+                                <article class="dashboard-subpanel">
+                                    <p class="eyebrow">Step 1</p>
+                                    <h3>Ingredients</h3>
+                                    <div class="table-shell compact-table admin-table-wrap">
+                                        <table class="table wiz-ingredients-table">
+                                            <thead><tr><th>Ingredient</th><th>Unit</th><th>Cost / unit</th><th>Qty used</th><th>Line cost</th><th></th></tr></thead>
+                                            <tbody class="wiz-ingredients-body">
+                                                <tr class="wiz-row">
+                                                    <td><input type="text" class="wiz-input wiz-name" placeholder="e.g. Flour"></td>
+                                                    <td class="wiz-unit-cell">
+                                                        <select class="wiz-input wiz-unit-select" aria-label="Ingredient unit">
+                                                            {% include 'partials/wiz_unit_select_options.html' %}
+                                                        </select>
+                                                    </td>
+                                                    <td><input type="number" class="wiz-input wiz-unit-cost" min="0" step="0.01" placeholder="0.00"></td>
+                                                    <td><input type="number" class="wiz-input wiz-qty" min="0" step="0.01" placeholder="0"></td>
+                                                    <td class="wiz-line-cost">PHP 0.00</td>
+                                                    <td><button type="button" class="ghost-link small-action danger-action wiz-remove-row">✕</button></td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot><tr><td colspan="4" style="text-align:right;font-weight:600;">Total ingredients cost</td><td class="wiz-total-ingredients" style="font-weight:700;">PHP 0.00</td><td></td></tr></tfoot>
+                                        </table>
+                                    </div>
+                                    <button type="button" class="ghost-link wiz-add-row" style="margin-top:0.5rem;">+ Add ingredient</button>
+                                </article>
+
+                                <article class="dashboard-subpanel">
+                                    <p class="eyebrow">Step 2</p>
+                                    <h3>Batch &amp; Overhead</h3>
+                                    <div class="wizard-fields">
+                                        <label>Pieces per batch<input type="number" class="wiz-input wiz-batch-size" min="1" value="1"></label>
+                                        <label>Labor cost (per batch)<input type="number" class="wiz-input wiz-labor" min="0" step="0.01" value="0"></label>
+                                        <label>Packaging cost (per piece)<input type="number" class="wiz-input wiz-packaging" min="0" step="0.01" value="0"></label>
+                                        <label>Utilities / other (per batch)<input type="number" class="wiz-input wiz-utilities" min="0" step="0.01" value="0"></label>
+                                    </div>
+                                </article>
+
+                                <article class="dashboard-subpanel">
+                                    <p class="eyebrow">Step 3</p>
+                                    <h3>Desired Profit Margin</h3>
+                                    <div class="wizard-margin-wrap">
+                                        <input type="range" class="wiz-slider wiz-margin-slider" min="0" max="80" value="40">
+                                        <div class="wizard-margin-display"><span class="wiz-margin-pct">40</span>%</div>
+                                    </div>
+                                </article>
                             </div>
-                        </article>
+
+                            <div class="wizard-results">
+                                <article class="dashboard-subpanel wizard-result-card">
+                                    <p class="eyebrow">Results</p>
+                                    <h3>Pricing Breakdown</h3>
+                                    <div class="wizard-result-grid">
+                                        <div class="wiz-result-item"><span>Ingredients / batch</span><strong class="wiz-r-ingredients">PHP 0.00</strong></div>
+                                        <div class="wiz-result-item"><span>Labor / batch</span><strong class="wiz-r-labor">PHP 0.00</strong></div>
+                                        <div class="wiz-result-item"><span>Utilities / batch</span><strong class="wiz-r-utilities">PHP 0.00</strong></div>
+                                        <div class="wiz-result-item"><span>Total batch cost</span><strong class="wiz-r-batch-cost">PHP 0.00</strong></div>
+                                        <hr>
+                                        <div class="wiz-result-item highlight"><span>Cost per piece</span><strong class="wiz-r-cost-per-piece">PHP 0.00</strong></div>
+                                        <div class="wiz-result-item"><span>+ Packaging / piece</span><strong class="wiz-r-packaging">PHP 0.00</strong></div>
+                                        <div class="wiz-result-item highlight"><span>Total cost per piece</span><strong class="wiz-r-total-cost-piece">PHP 0.00</strong></div>
+                                        <hr>
+                                        <div class="wiz-result-item accent"><span>Suggested selling price</span><strong class="wiz-r-sell-price">PHP 0.00</strong></div>
+                                        <div class="wiz-result-item accent"><span>Profit per piece</span><strong class="wiz-r-profit-piece">PHP 0.00</strong></div>
+                                        <div class="wiz-result-item"><span>Profit per batch</span><strong class="wiz-r-profit-batch">PHP 0.00</strong></div>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
                     </div>
                 </div>
+                {% endif %}
             </section>
 
         </section>
@@ -988,7 +1057,7 @@
 
             function loadReport(period) {
                 reportBody.innerHTML = '<tr><td colspan="8" class="panel-note">Loading…</td></tr>';
-                fetch('/inventory/stock-counts/report?period=' + period)
+                fetch("{{ url_for('stock_count_report_api') }}?period=" + period)
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         /* summary cards */
@@ -1038,18 +1107,33 @@
             loadReport('daily');
         })();
 
-        /* ── Pricing Wizard ── */
+        /* ── Pricing Wizard (multi-product) ── */
         (function() {
-            var body = document.getElementById('wiz-ingredients-body');
-            if (!body) return;
+            var shell = document.getElementById('pricing-wizard-shell');
+            var container = document.getElementById('wiz-products-container');
+            if (!shell || !container) return;
 
-            var rowTemplate = body.querySelector('.wiz-row').cloneNode(true);
+            var tabsEl = document.getElementById('wiz-product-tabs');
+            var addProductBtn = document.getElementById('wiz-add-product');
+            var limitEl = document.getElementById('wiz-product-limit');
+            var wizardMode = shell.dataset.wizardMode || 'full';
+            var maxProducts = shell.dataset.maxProducts ? parseInt(shell.dataset.maxProducts, 10) : null;
+            var activeIndex = 0;
+            var panelTemplate = container.querySelector('.wiz-product-panel').cloneNode(true);
 
             function ph(val) {
                 return 'PHP ' + val.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
 
-            function recalc() {
+            function productLabel(panel, index) {
+                var nameInput = panel.querySelector('.wiz-product-name');
+                var name = nameInput && nameInput.value.trim();
+                return name || ('Product ' + (index + 1));
+            }
+
+            function recalcPanel(panel) {
+                var body = panel.querySelector('.wiz-ingredients-body');
+                if (!body) return;
                 var rows = body.querySelectorAll('.wiz-row');
                 var totalIngredients = 0;
                 rows.forEach(function(row) {
@@ -1060,58 +1144,181 @@
                     totalIngredients += line;
                 });
 
-                var batchSize = parseInt(document.getElementById('wiz-batch-size').value) || 1;
-                var labor = parseFloat(document.getElementById('wiz-labor').value) || 0;
-                var packaging = parseFloat(document.getElementById('wiz-packaging').value) || 0;
-                var utilities = parseFloat(document.getElementById('wiz-utilities').value) || 0;
-                var margin = parseFloat(document.getElementById('wiz-margin-slider').value) || 0;
+                var batchSize = parseInt(panel.querySelector('.wiz-batch-size').value, 10) || 1;
+                var labor = parseFloat(panel.querySelector('.wiz-labor').value) || 0;
+                var packaging = parseFloat(panel.querySelector('.wiz-packaging').value) || 0;
+                var utilities = parseFloat(panel.querySelector('.wiz-utilities').value) || 0;
+                var marginSlider = panel.querySelector('.wiz-margin-slider');
+                var margin = marginSlider ? (parseFloat(marginSlider.value) || 0) : 40;
 
-                document.getElementById('wiz-margin-pct').textContent = margin;
+                panel.querySelector('.wiz-margin-pct').textContent = margin;
 
                 var totalBatchCost = totalIngredients + labor + utilities;
                 var costPerPiece = batchSize > 0 ? totalBatchCost / batchSize : 0;
                 var totalCostPerPiece = costPerPiece + packaging;
                 var sellPrice = margin < 100 ? totalCostPerPiece / (1 - margin / 100) : 0;
-                var profitPerPiece = sellPrice - totalCostPerPiece;
-                var profitPerBatch = profitPerPiece * batchSize;
 
-                document.getElementById('wiz-total-ingredients').textContent = ph(totalIngredients);
-                document.getElementById('wiz-r-ingredients').textContent = ph(totalIngredients);
-                document.getElementById('wiz-r-labor').textContent = ph(labor);
-                document.getElementById('wiz-r-utilities').textContent = ph(utilities);
-                document.getElementById('wiz-r-batch-cost').textContent = ph(totalBatchCost);
-                document.getElementById('wiz-r-cost-per-piece').textContent = ph(costPerPiece);
-                document.getElementById('wiz-r-packaging').textContent = ph(packaging);
-                document.getElementById('wiz-r-total-cost-piece').textContent = ph(totalCostPerPiece);
-                document.getElementById('wiz-r-sell-price').textContent = ph(Math.ceil(sellPrice));
-                document.getElementById('wiz-r-profit-piece').textContent = ph(Math.ceil(sellPrice) - totalCostPerPiece);
-                document.getElementById('wiz-r-profit-batch').textContent = ph((Math.ceil(sellPrice) - totalCostPerPiece) * batchSize);
+                panel.querySelector('.wiz-total-ingredients').textContent = ph(totalIngredients);
+                panel.querySelector('.wiz-r-ingredients').textContent = ph(totalIngredients);
+                panel.querySelector('.wiz-r-labor').textContent = ph(labor);
+                panel.querySelector('.wiz-r-utilities').textContent = ph(utilities);
+                panel.querySelector('.wiz-r-batch-cost').textContent = ph(totalBatchCost);
+                panel.querySelector('.wiz-r-cost-per-piece').textContent = ph(costPerPiece);
+                panel.querySelector('.wiz-r-packaging').textContent = ph(packaging);
+                panel.querySelector('.wiz-r-total-cost-piece').textContent = ph(totalCostPerPiece);
+                panel.querySelector('.wiz-r-sell-price').textContent = ph(Math.ceil(sellPrice));
+                panel.querySelector('.wiz-r-profit-piece').textContent = ph(Math.ceil(sellPrice) - totalCostPerPiece);
+                panel.querySelector('.wiz-r-profit-batch').textContent = ph((Math.ceil(sellPrice) - totalCostPerPiece) * batchSize);
             }
 
-            document.getElementById('wiz-add-row').addEventListener('click', function() {
-                var newRow = rowTemplate.cloneNode(true);
-                newRow.querySelectorAll('input').forEach(function(i) { i.value = ''; });
-                newRow.querySelector('.wiz-line-cost').textContent = 'PHP 0.00';
-                body.appendChild(newRow);
-                bindRow(newRow);
-            });
+            function bindIngredientRow(panel, row) {
+                row.querySelectorAll('input, select').forEach(function(el) {
+                    el.addEventListener('input', function() { recalcPanel(panel); });
+                    el.addEventListener('change', function() { recalcPanel(panel); });
+                });
+                var body = panel.querySelector('.wiz-ingredients-body');
+                var removeBtn = row.querySelector('.wiz-remove-row');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function() {
+                        if (body.querySelectorAll('.wiz-row').length > 1) {
+                            row.remove();
+                            recalcPanel(panel);
+                        }
+                    });
+                }
+            }
 
-            function bindRow(row) {
-                row.querySelectorAll('input').forEach(function(i) { i.addEventListener('input', recalc); });
-                row.querySelector('.wiz-remove-row').addEventListener('click', function() {
-                    if (body.querySelectorAll('.wiz-row').length > 1) {
-                        row.remove();
-                        recalc();
+            function bindPanel(panel) {
+                var body = panel.querySelector('.wiz-ingredients-body');
+                var rowTemplate = body.querySelector('.wiz-row').cloneNode(true);
+                body.querySelectorAll('.wiz-row').forEach(function(row) { bindIngredientRow(panel, row); });
+
+                var addRowBtn = panel.querySelector('.wiz-add-row');
+                if (addRowBtn) {
+                    addRowBtn.addEventListener('click', function() {
+                        var newRow = rowTemplate.cloneNode(true);
+                        newRow.querySelectorAll('input').forEach(function(i) { i.value = ''; });
+                        newRow.querySelector('.wiz-line-cost').textContent = 'PHP 0.00';
+                        body.appendChild(newRow);
+                        bindIngredientRow(panel, newRow);
+                        recalcPanel(panel);
+                    });
+                }
+
+                ['.wiz-batch-size', '.wiz-labor', '.wiz-packaging', '.wiz-utilities', '.wiz-margin-slider'].forEach(function(sel) {
+                    var el = panel.querySelector(sel);
+                    if (el) el.addEventListener('input', function() { recalcPanel(panel); });
+                });
+
+                var nameInput = panel.querySelector('.wiz-product-name');
+                if (nameInput) {
+                    nameInput.addEventListener('input', function() { renderTabs(); });
+                }
+
+                recalcPanel(panel);
+            }
+
+            function panels() {
+                return Array.prototype.slice.call(container.querySelectorAll('.wiz-product-panel'));
+            }
+
+            function setActivePanel(index) {
+                activeIndex = index;
+                panels().forEach(function(panel, i) {
+                    panel.classList.toggle('is-active', i === index);
+                });
+                renderTabs();
+            }
+
+            function renderTabs() {
+                if (!tabsEl) return;
+                tabsEl.innerHTML = '';
+                var allPanels = panels();
+                allPanels.forEach(function(panel, index) {
+                    var tab = document.createElement('button');
+                    tab.type = 'button';
+                    tab.className = 'wiz-product-tab' + (index === activeIndex ? ' is-active' : '');
+                    tab.setAttribute('role', 'tab');
+                    tab.setAttribute('aria-selected', index === activeIndex ? 'true' : 'false');
+
+                    var label = document.createElement('span');
+                    label.textContent = productLabel(panel, index);
+                    tab.appendChild(label);
+
+                    if (allPanels.length > 1) {
+                        var remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.className = 'wiz-product-tab-remove';
+                        remove.setAttribute('aria-label', 'Remove product');
+                        remove.textContent = '×';
+                        remove.addEventListener('click', function(ev) {
+                            ev.stopPropagation();
+                            panel.remove();
+                            if (activeIndex >= panels().length) activeIndex = Math.max(0, panels().length - 1);
+                            setActivePanel(activeIndex);
+                            updateProductControls();
+                        });
+                        tab.appendChild(remove);
                     }
+
+                    tab.addEventListener('click', function() { setActivePanel(index); });
+                    tabsEl.appendChild(tab);
                 });
             }
 
-            body.querySelectorAll('.wiz-row').forEach(bindRow);
-            document.getElementById('wiz-batch-size').addEventListener('input', recalc);
-            document.getElementById('wiz-labor').addEventListener('input', recalc);
-            document.getElementById('wiz-packaging').addEventListener('input', recalc);
-            document.getElementById('wiz-utilities').addEventListener('input', recalc);
-            document.getElementById('wiz-margin-slider').addEventListener('input', recalc);
+            function updateProductControls() {
+                var count = panels().length;
+                var atLimit = maxProducts !== null && count >= maxProducts;
+                if (addProductBtn) {
+                    addProductBtn.disabled = atLimit;
+                    addProductBtn.style.opacity = atLimit ? '0.55' : '';
+                    addProductBtn.title = atLimit ? 'Upgrade to Growth for unlimited products' : '';
+                }
+                if (limitEl && maxProducts !== null) {
+                    limitEl.hidden = false;
+                    limitEl.textContent = count + ' of ' + maxProducts + ' demo products';
+                    if (atLimit) {
+                        limitEl.textContent += ' · Upgrade for unlimited';
+                    }
+                }
+            }
+
+            function addProduct() {
+                var count = panels().length;
+                if (maxProducts !== null && count >= maxProducts) return;
+                var panel = panelTemplate.cloneNode(true);
+                panel.classList.remove('is-active');
+                panel.dataset.productIndex = String(count);
+                panel.querySelectorAll('input').forEach(function(input) {
+                    if (input.type === 'number') {
+                        if (input.classList.contains('wiz-batch-size')) input.value = '1';
+                        else if (input.classList.contains('wiz-margin-slider')) input.value = '40';
+                        else input.value = input.min === '1' ? '1' : '0';
+                    } else {
+                        input.value = '';
+                    }
+                });
+                panel.querySelector('.wiz-margin-pct').textContent = '40';
+                panel.querySelectorAll('.wiz-line-cost, .wiz-total-ingredients, .wizard-result-grid strong').forEach(function(el) {
+                    el.textContent = 'PHP 0.00';
+                });
+                var body = panel.querySelector('.wiz-ingredients-body');
+                body.querySelectorAll('.wiz-row').forEach(function(row, i) {
+                    if (i > 0) row.remove();
+                });
+                container.appendChild(panel);
+                bindPanel(panel);
+                setActivePanel(count);
+                updateProductControls();
+            }
+
+            panels().forEach(function(panel, index) {
+                panel.dataset.productIndex = String(index);
+                bindPanel(panel);
+            });
+            if (addProductBtn) addProductBtn.addEventListener('click', addProduct);
+            setActivePanel(0);
+            updateProductControls();
         })();
     </script>
     <script>

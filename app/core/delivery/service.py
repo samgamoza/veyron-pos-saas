@@ -5,6 +5,7 @@ from typing import Any
 from app.core.audit import audit_service
 from app.core.delivery.models import DeliverySettings
 from app.core.delivery.repository import DeliveryRepository
+from app.core.delivery.references import REFERENCE_SALE
 
 
 class DeliveryStatus:
@@ -56,6 +57,8 @@ class DeliveryService:
         address: str,
         instructions: str = "",
         delivery_fee: float = 0.0,
+        *,
+        reference_type: str = REFERENCE_SALE,
     ) -> int:
         self.ensure_delivery_enabled(tenant_id)
         return self.repository.create_delivery_order(
@@ -64,11 +67,20 @@ class DeliveryService:
             address=address,
             instructions=instructions,
             delivery_fee=delivery_fee,
+            reference_type=reference_type,
         )
 
-    def get_delivery_order(self, tenant_id: int, order_id: int) -> dict[str, Any] | None:
+    def get_delivery_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        *,
+        reference_type: str = REFERENCE_SALE,
+    ) -> dict[str, Any] | None:
         self.ensure_delivery_enabled(tenant_id)
-        return self.repository.get_delivery_order(tenant_id, order_id)
+        return self.repository.get_delivery_order(
+            tenant_id, order_id, reference_type=reference_type
+        )
 
     def list_delivery_orders(self, tenant_id: int, status: str | None = None) -> list[dict[str, Any]]:
         self.ensure_delivery_enabled(tenant_id)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from flask import Flask, Response, abort, flash, redirect, request, send_file, session, url_for
 
-from app.core.auth import login_required
+from app.core.auth import login_required, safe_local_redirect
 from app.core.constants import ALLOWED_IMAGE_EXTENSIONS
 from app.core.db import get_connection
 from app.core.locations import LocationService
@@ -82,9 +82,15 @@ def register_owner_routes(app: Flask) -> None:
     @app.route("/owner/qr.svg")
     @login_required("owner")
     def owner_qr_svg():
+        from app.core.subscription import entitlements as sub_entitlements
+
         tenant_id = session.get("tenant_id")
         if not tenant_id:
             abort(404)
+        with get_connection() as connection:
+            qr_access = sub_entitlements.qr_plan_access(connection, int(tenant_id))
+        if qr_access["show_qr_locked"]:
+            abort(403)
         table = (request.args.get("table", "") or "").strip()[:40]
         kwargs: dict[str, object] = {"tenant_id": int(tenant_id), "_external": True}
         if table:
@@ -187,6 +193,8 @@ def register_owner_routes(app: Flask) -> None:
     @app.route("/owner/settings/save", methods=["POST"])
     @login_required("owner")
     def save_settings():
+        from app.core.subscription import entitlements as sub_entitlements
+
         delivery_enabled = 1 if request.form.get("delivery_enabled") else 0
         # VAT rate is entered as a percentage in the UI and stored as a decimal.
         raw_vat_percent = request.form.get("vat_rate_percent", "").strip()
@@ -225,6 +233,10 @@ def register_owner_routes(app: Flask) -> None:
         }
         tenant_id = session.get("tenant_id")
         with get_connection() as connection:
+            if tenant_id:
+                qr_access = sub_entitlements.qr_plan_access(connection, int(tenant_id))
+                if qr_access.get("show_qr_locked"):
+                    settings["qr_ordering_enabled"] = "0"
             if tenant_id:
                 connection.execute("UPDATE tenants SET delivery_enabled = ? WHERE id = ?", (delivery_enabled, tenant_id))
             if tenant_id:
@@ -309,4 +321,4 @@ def register_owner_routes(app: Flask) -> None:
         with get_connection() as connection:
             web_queries.log_audit(connection, "drawer_open", "hardware", None, "Cash drawer open requested from receipt screen")
         flash("Drawer open logged. Use a local printer bridge for actual ESC/POS drawer pulses.", "success")
-        return redirect(request.form.get("return_to") or url_for("pos"))
+        return redirect(safe_local_redirect(request.form.get("return_to"), url_for("pos")))

@@ -50,7 +50,8 @@ class AdminService:
                     delivery_callback_url,
                     storefront_enabled, storefront_url, auto_storefront_enabled, storefront_template,
                     parent_tenant_id, org_slug, outlet_code, bir_tin, bir_vat_registered, compliance_notes,
-                    bir_last_report_generated, feature_flags_json, pos_profile
+                    bir_last_report_generated, feature_flags_json, pos_profile,
+                    pending_plan_name, pending_plan_fee, plan_upgrade_requested_at, qr_ordering_override
                 FROM tenants ORDER BY created_at DESC
                 """
             ).fetchall()
@@ -234,6 +235,7 @@ class AdminService:
         compliance_notes: str,
         feature_flags_json: str,
         pos_profile: str,
+        qr_ordering_override: str = "",
     ) -> None:
         if parent_tenant_id is not None:
             if parent_tenant_id == tenant_id:
@@ -255,7 +257,7 @@ class AdminService:
                     delivery_api_key = ?, delivery_callback_url = ?, storefront_enabled = ?, storefront_url = ?,
                     auto_storefront_enabled = ?,
                     parent_tenant_id = ?, org_slug = ?, outlet_code = ?, bir_tin = ?, bir_vat_registered = ?,
-                    compliance_notes = ?, feature_flags_json = ?, pos_profile = ?
+                    compliance_notes = ?, feature_flags_json = ?, pos_profile = ?, qr_ordering_override = ?
                 WHERE id = ?
                 """,
                 (
@@ -287,9 +289,13 @@ class AdminService:
                     compliance_notes.strip(),
                     feature_flags_json,
                     normalize_pos_profile_id(pos_profile),
+                    (qr_ordering_override or "").strip().lower(),
                     tenant_id,
                 ),
             )
+            from app.core.subscription.upgrade_workflow import clear_pending_plan_fields
+
+            clear_pending_plan_fields(connection, tenant_id)
             self.log_audit(
                 connection,
                 "edit",
@@ -298,6 +304,18 @@ class AdminService:
                 f"Tenant edited: {name}, status={is_active}, plan={plan_name}, subscription={subscription_status}, fee={billing_currency} {monthly_fee:.2f}",
                 tenant_id=tenant_id,
             )
+
+    def approve_tenant_plan_upgrade(self, tenant_id: int) -> None:
+        with get_connection() as connection:
+            from app.core.subscription.upgrade_workflow import approve_plan_upgrade
+
+            approve_plan_upgrade(connection, tenant_id, actor_label="Super Admin")
+
+    def reject_tenant_plan_upgrade(self, tenant_id: int, reason: str = "") -> None:
+        with get_connection() as connection:
+            from app.core.subscription.upgrade_workflow import reject_plan_upgrade
+
+            reject_plan_upgrade(connection, tenant_id, actor_label="Super Admin", reason=reason)
 
     def set_tenant_active(self, tenant_id: int, active: bool) -> None:
         with get_connection() as connection:
@@ -574,13 +592,18 @@ class AdminService:
                 ORDER BY org.name
                 """
             health_delivery_attention = connection.execute(health_delivery_sql).fetchall()
+            from app.core.subscription.upgrade_workflow import list_pending_plan_upgrades
+
+            pending_plan_upgrades = list_pending_plan_upgrades(connection)
             organization_rollups = connection.execute(organization_rollups_sql).fetchall()
             metrics["pending_issues_count"] = (
                 len(health_trials_ending)
                 + len(health_overdue_invoices)
                 + len(health_subscription_overdue)
                 + len(health_delivery_attention)
+                + len(pending_plan_upgrades)
             )
+            metrics["pending_plan_upgrades_count"] = len(pending_plan_upgrades)
             saas_metrics = {
                 "db_subscriptions": int(
                     _sql_scalar(
@@ -683,8 +706,8 @@ class AdminService:
             ).fetchall()
             delivery_orders_recent = connection.execute(
                 """
-                SELECT d.id, d.tenant_id, t.name AS tenant_name, d.order_id, d.status, d.delivery_fee,
-                    d.address, d.created_at
+                SELECT d.id, d.tenant_id, t.name AS tenant_name, d.order_id, d.reference_type, d.status,
+                    d.delivery_fee, d.address, d.created_at
                 FROM delivery_orders d
                 JOIN tenants t ON t.id = d.tenant_id
                 ORDER BY d.created_at DESC, d.id DESC
@@ -716,6 +739,7 @@ class AdminService:
             "health_overdue_invoices": [dict(row) for row in health_overdue_invoices],
             "health_subscription_overdue": [dict(row) for row in health_subscription_overdue],
             "health_delivery_attention": [dict(row) for row in health_delivery_attention],
+            "pending_plan_upgrades": pending_plan_upgrades,
             "organization_rollups": [dict(row) for row in organization_rollups],
         }
 

@@ -1,0 +1,7 @@
+{% for group in wizard_unit_groups %}
+<optgroup label="{{ group.label }}">
+    {% for unit in group.units %}
+    <option value="{{ unit.symbol }}" data-conversion="{{ unit.conversion }}">{{ unit.name }} ({{ unit.symbol }})</option>
+    {% endfor %}
+</optgroup>
+{% endfor %}

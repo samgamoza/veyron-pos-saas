@@ -4,6 +4,7 @@ from typing import Any
 
 from app.core.db import get_connection
 from app.core.delivery.models import DeliverySettings
+from app.core.delivery.references import REFERENCE_SALE
 
 
 RIDER_COLUMNS = (
@@ -12,7 +13,7 @@ RIDER_COLUMNS = (
 )
 
 DELIVERY_ORDER_COLUMNS = (
-    "id, tenant_id, order_id, rider_id, address, instructions, delivery_fee, "
+    "id, tenant_id, order_id, reference_type, rider_id, address, instructions, delivery_fee, "
     "status, assigned_at, picked_up_at, delivered_at, created_at, updated_at"
 )
 
@@ -81,25 +82,38 @@ class DeliveryRepository:
         address: str,
         instructions: str,
         delivery_fee: float,
+        *,
+        reference_type: str = REFERENCE_SALE,
     ) -> int:
         with get_connection() as connection:
             row = connection.execute(
                 """
                 INSERT INTO delivery_orders (
-                    tenant_id, order_id, address, instructions, delivery_fee, status
-                ) VALUES (?, ?, ?, ?, ?, 'pending')
+                    tenant_id, order_id, reference_type, address, instructions, delivery_fee, status
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending')
                 RETURNING id
                 """,
-                (tenant_id, order_id, address, instructions, delivery_fee),
+                (tenant_id, order_id, reference_type, address, instructions, delivery_fee),
             ).fetchone()
         return int(row["id"])
 
-    def get_delivery_order(self, tenant_id: int, order_id: int) -> dict[str, Any] | None:
+    def get_delivery_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        *,
+        reference_type: str = REFERENCE_SALE,
+    ) -> dict[str, Any] | None:
         with get_connection() as connection:
-            return connection.execute(
-                f"SELECT {DELIVERY_ORDER_COLUMNS} FROM delivery_orders WHERE tenant_id = ? AND order_id = ?",
-                (tenant_id, order_id),
+            row = connection.execute(
+                f"""
+                SELECT {DELIVERY_ORDER_COLUMNS}
+                FROM delivery_orders
+                WHERE tenant_id = ? AND order_id = ? AND reference_type = ?
+                """,
+                (tenant_id, order_id, reference_type),
             ).fetchone()
+        return dict(row) if row else None
 
     def list_delivery_orders(self, tenant_id: int, status: str | None = None) -> list[dict[str, Any]]:
         with get_connection() as connection:

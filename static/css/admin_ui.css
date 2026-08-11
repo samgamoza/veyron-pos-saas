@@ -297,11 +297,22 @@ textarea {
     color: #fff;
 }
 
-.auth-hero-panel .brand-logo {
+.auth-hero-panel .brand-logo,
+.auth-hero-panel .login-logo {
+    display: block;
+    width: min(46vw, 176px);
+    max-width: 176px;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    image-rendering: auto;
     filter: none;
-    background: rgba(255, 255, 255, 0.92);
-    border-radius: 12px;
-    padding: 0.35rem 0.5rem;
+    background: transparent;
+    border: 0;
+    border-radius: 28px;
+    padding: 0;
+    margin: 0 0 1.15rem;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
 }
 
 .auth-feature-list {
@@ -406,6 +417,44 @@ textarea {
 
 .auth-secondary-links .ghost-link:hover {
     background: color-mix(in srgb, var(--accent, #0f6a5d) 8%, transparent);
+}
+
+.auth-footer {
+    margin-top: 1.35rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--ui-border);
+    text-align: center;
+}
+
+.auth-footer-cta {
+    margin: 0;
+    color: var(--ui-muted);
+    font-size: 0.95rem;
+}
+
+.auth-footer-cta a {
+    color: var(--accent, #0f6a5d);
+    font-weight: 650;
+    text-decoration: none;
+}
+
+.auth-footer-cta a:hover {
+    text-decoration: underline;
+}
+
+.auth-footer-meta {
+    margin: 0.75rem 0 0;
+    font-size: 0.8rem;
+}
+
+.auth-footer-meta a {
+    color: var(--ui-muted);
+    text-decoration: none;
+}
+
+.auth-footer-meta a:hover {
+    color: var(--ui-text);
+    text-decoration: underline;
 }
 
 @media (max-width: 992px) {

@@ -81,6 +81,7 @@ def log_audit(
     entity_type: str,
     entity_id: int | None = None,
     details: str = "",
+    tenant_id: int | None = None,
 ) -> None:
     audit_service.log(
         connection=connection,
@@ -88,6 +89,7 @@ def log_audit(
         entity_type=entity_type,
         entity_id=entity_id,
         details=details,
+        tenant_id=tenant_id,
     )
 
 
@@ -139,12 +141,15 @@ def create_owner_alert(
     related_entity_type: str | None = None,
     related_entity_id: int | None = None,
     email_setting_key: str | None = None,
+    tenant_id: int | None = None,
 ) -> None:
     from flask import has_request_context
 
     from app.core.tenant.context import current_tenant_id
 
-    tid = session.get("tenant_id") if has_request_context() else None
+    tid = tenant_id
+    if tid is None:
+        tid = session.get("tenant_id") if has_request_context() else None
     if tid is None and has_request_context():
         ct = current_tenant_id()
         tid = ct if ct is not None else 1
@@ -426,6 +431,26 @@ def ensure_column(connection, table_name: str, column_name: str, definition: str
         connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
 
 
+def ensure_delivery_orders_online_support(connection) -> None:
+    """Allow delivery_orders.order_id to reference online orders as well as POS sales."""
+    ensure_column(connection, "delivery_orders", "reference_type", "TEXT NOT NULL DEFAULT 'sale'")
+    if DATABASE_ENGINE != "postgres":
+        return
+    rows = connection.execute(
+        """
+        SELECT c.conname
+        FROM pg_constraint c
+        JOIN pg_class t ON c.conrelid = t.oid
+        WHERE t.relname = 'delivery_orders'
+          AND c.contype = 'f'
+          AND position('references sales' in lower(pg_get_constraintdef(c.oid))) > 0
+        """
+    ).fetchall()
+    for row in rows:
+        name = str(row["conname"])
+        connection.execute(f'ALTER TABLE delivery_orders DROP CONSTRAINT IF EXISTS "{name}"')
+
+
 def seed_lookup_table(connection, table_name: str, values: list[str]) -> None:
     if DATABASE_ENGINE == "postgres":
         connection.executemany(
@@ -440,21 +465,72 @@ def seed_lookup_table(connection, table_name: str, values: list[str]) -> None:
     )
 
 
-def seed_units_data(connection) -> None:
-    """Seed extended unit data (symbol, type, conversion) for measurement system."""
+def seed_units_for_tenant(connection: Any, tenant_id: int) -> None:
+    """Seed extended unit data (symbol, type, conversion) for one tenant."""
     for name, symbol, utype, conversion in DEFAULT_UNITS_DATA:
         if DATABASE_ENGINE == "postgres":
             connection.execute(
-                "INSERT INTO units (tenant_id, name, symbol, type, conversion) VALUES (1, %s, %s, %s, %s) "
+                "INSERT INTO units (tenant_id, name, symbol, type, conversion) VALUES (%s, %s, %s, %s, %s) "
                 "ON CONFLICT (tenant_id, name) DO UPDATE SET symbol=EXCLUDED.symbol, type=EXCLUDED.type, conversion=EXCLUDED.conversion",
-                (name, symbol, utype, conversion),
+                (tenant_id, name, symbol, utype, conversion),
             )
         else:
             connection.execute(
-                "INSERT INTO units (tenant_id, name, symbol, type, conversion) VALUES (1, ?, ?, ?, ?) "
+                "INSERT INTO units (tenant_id, name, symbol, type, conversion) VALUES (?, ?, ?, ?, ?) "
                 "ON CONFLICT(tenant_id, name) DO UPDATE SET symbol=excluded.symbol, type=excluded.type, conversion=excluded.conversion",
-                (name, symbol, utype, conversion),
+                (tenant_id, name, symbol, utype, conversion),
             )
+
+
+def ensure_tenant_units(connection: Any, tenant_id: int) -> None:
+    """Ensure a tenant has measurement units for inventory and the pricing wizard."""
+    row = connection.execute(
+        "SELECT COUNT(*) AS c FROM units WHERE tenant_id = ?",
+        (tenant_id,),
+    ).fetchone()
+    if int(row["c"] if row else 0) > 0:
+        return
+    seed_units_for_tenant(connection, tenant_id)
+
+
+def seed_units_data(connection) -> None:
+    """Seed extended unit data for the bootstrap tenant (legacy app init)."""
+    seed_units_for_tenant(connection, 1)
+
+
+_WIZARD_UNIT_GROUP_LABELS: tuple[tuple[str, str], ...] = (
+    ("weight", "Weight"),
+    ("volume", "Volume"),
+    ("count", "Count"),
+)
+
+
+def fetch_wizard_unit_groups(tenant_id: int | None = None) -> list[dict[str, object]]:
+    """Grouped unit options for the pricing wizard select (tenant-scoped, auto-seeded)."""
+    resolved_tenant_id = tenant_id or session.get("tenant_id")
+    if not resolved_tenant_id:
+        return _wizard_unit_groups_from_rows(
+            [
+                {"name": name, "symbol": symbol, "type": utype, "conversion": conversion}
+                for name, symbol, utype, conversion in DEFAULT_UNITS_DATA
+            ]
+        )
+
+    with get_connection() as connection:
+        ensure_tenant_units(connection, int(resolved_tenant_id))
+        rows = connection.execute(
+            "SELECT name, symbol, type, conversion FROM units ORDER BY type, name"
+        ).fetchall()
+    return _wizard_unit_groups_from_rows([dict(row) for row in rows])
+
+
+def _wizard_unit_groups_from_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    grouped: list[dict[str, object]] = []
+    for utype, label in _WIZARD_UNIT_GROUP_LABELS:
+        items = [row for row in rows if row.get("type") == utype]
+        if items:
+            grouped.append({"type": utype, "label": label, "units": items})
+    return grouped
 
 
 def fetch_lookup_ids(connection: sqlite3.Connection, table_name: str) -> dict[str, int]:
@@ -636,6 +712,9 @@ def fetch_lookup_rows(table_name: str) -> list[sqlite3.Row]:
                 "SELECT id, name, sort_order FROM categories ORDER BY sort_order ASC, id ASC"
             ).fetchall()
         if table_name == "units":
+            tenant_id = session.get("tenant_id")
+            if tenant_id:
+                ensure_tenant_units(connection, int(tenant_id))
             return connection.execute(
                 "SELECT id, name, symbol, type, conversion FROM units ORDER BY type, name"
             ).fetchall()
@@ -1288,14 +1367,31 @@ def fetch_recent_shifts(limit: int = 7) -> list[dict]:
 
 
 def fetch_inventory_context() -> dict[str, object]:
+    from app.core.subscription import entitlements as sub_entitlements
+
     products = fetch_admin_products()
     active_products = [product for product in products if product["status"] == "active"]
     open_stock_count, stock_count_items = fetch_open_stock_count()
     today_shift = fetch_today_shift()
     recent_shifts = fetch_recent_shifts()
+
+    tenant_id = session.get("tenant_id")
+    plan_name = sub_entitlements.DEMO_PLAN_NAME
+    plan_access = sub_entitlements.inventory_plan_access(sub_entitlements.DEMO_PLAN_NAME)
+    if tenant_id:
+        with get_connection() as connection:
+            plan_name = sub_entitlements.tenant_plan_name(connection, int(tenant_id))
+            plan_access = sub_entitlements.inventory_plan_access(plan_name)
+
+    reports = (
+        fetch_reports_context()
+        if plan_access["inventory_reports"]
+        else sub_entitlements.empty_reports_context()
+    )
+
     return {
         "metrics": fetch_dashboard_metrics(),
-        "reports": fetch_reports_context(),
+        "reports": reports,
         "active_products": active_products,
         "variants_map": fetch_variants_by_product(),
         "inventory_watchlist": fetch_inventory_watchlist(),
@@ -1308,6 +1404,9 @@ def fetch_inventory_context() -> dict[str, object]:
         "today_shift": today_shift,
         "recent_shifts": recent_shifts,
         "units": fetch_lookup_rows("units"),
+        "wizard_unit_groups": fetch_wizard_unit_groups(),
+        "tenant_plan_name": plan_name,
+        "plan_access": plan_access,
     }
 
 
@@ -1334,7 +1433,8 @@ def fetch_owner_context() -> dict[str, object]:
         with get_connection() as connection:
             row = connection.execute(
                 """
-                SELECT plan_name, subscription_status, monthly_fee, billing_currency
+                SELECT plan_name, subscription_status, monthly_fee, billing_currency,
+                       pending_plan_name, pending_plan_fee, plan_upgrade_requested_at
                 FROM tenants WHERE id = ?
                 """,
                 (tenant_id,),
@@ -1344,6 +1444,11 @@ def fetch_owner_context() -> dict[str, object]:
             demo_limits = sub_entitlements.demo_limits_summary(connection, int(tenant_id))
             locations = LocationService(connection).list_locations(int(tenant_id), include_inactive=True)
             promotions = PromotionService(connection).list_promotions(int(tenant_id), include_inactive=True)
+
+    qr_plan_access: dict[str, object] = {}
+    if tenant_id:
+        with get_connection() as connection:
+            qr_plan_access = sub_entitlements.qr_plan_access(connection, int(tenant_id))
 
     return {
         "metrics": fetch_dashboard_metrics(),
@@ -1361,6 +1466,7 @@ def fetch_owner_context() -> dict[str, object]:
         "locations": locations,
         "promotions": promotions,
         "order_url": order_url,
+        "qr_plan_access": qr_plan_access,
     }
 
 

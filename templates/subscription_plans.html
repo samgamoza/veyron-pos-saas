@@ -8,9 +8,38 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    <style>
+        .plan-card { position: relative; }
+        .plan-badge {
+            position: absolute;
+            top: 0.85rem;
+            right: 0.85rem;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--accent, #0f6a5d) 14%, #fff);
+            color: var(--accent-strong, #0a4c43);
+        }
+        .plan-compare {
+            font-size: 0.78rem;
+            color: var(--muted, #6f5a47);
+            margin-bottom: 0.75rem;
+            line-height: 1.35;
+        }
+        .pricing-lede {
+            border: 1px solid color-mix(in srgb, var(--accent, #0f6a5d) 18%, transparent);
+            border-radius: 12px;
+            padding: 0.85rem 1rem;
+            background: color-mix(in srgb, var(--accent, #0f6a5d) 6%, var(--surface-strong, #fff8ef));
+            font-size: 0.88rem;
+        }
+    </style>
 </head>
 <body class="admin-body">
-<main class="page-wrap" style="max-width: 64rem; margin: 0 auto; padding: 2rem 1rem 4rem;">
+<main class="page-wrap" style="max-width: 72rem; margin: 0 auto; padding: 2rem 1rem 4rem;">
     <header class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
         <div>
             <p class="eyebrow">Subscription</p>
@@ -37,43 +66,72 @@
         {% endif %}
     {% endwith %}
 
+    <section class="pricing-lede mb-4">
+        <strong>Philippine-market pricing.</strong>
+        Veyron stays below common cloud POS tiers (Nextar from ₱500/mo, Pinoy POS from ₱990/mo, UTAK from ₱1,500/mo)
+        with <strong>unlimited users</strong> on every paid plan — no per-cashier fees.
+        Hardware, BIR accreditation, and onboarding can be quoted separately when you go live.
+    </section>
+
+    {% if tenant.subscription_status == 'pending' and tenant.pending_plan_name %}
+    <section class="dashboard-panel mb-4" style="border-left: 4px solid var(--accent, #0f6a5d);">
+        <p class="eyebrow mb-1">Upgrade pending</p>
+        <p class="mb-0">
+            Your request for <strong>{{ tenant.pending_plan_name|title }}</strong>
+            ({{ tenant.billing_currency or 'PHP' }} {{ tenant.pending_plan_fee|round|int }}/mo) is awaiting platform admin approval.
+            You remain on <strong>{{ tenant.plan_name|title }}</strong> until confirmed.
+        </p>
+    </section>
+    {% endif %}
+
     <p class="small text-muted mb-4">
-        <strong>After you select a paid plan:</strong> demo product and monthly sales limits are removed, your subscription is marked active,
-        and the monthly fee shown below is stored for billing. Record payments the way you operate locally (bank, e-wallet, invoice) and align Owner settings with your chosen provider.
+        Selecting a paid plan submits an upgrade request. Platform admin activates it after payment confirmation —
+        demo limits stay in place until approval.
     </p>
 
     <div class="row g-3">
         {% for plan in plans %}
-        <div class="col-md-6 col-lg-4">
-            <article class="dashboard-panel h-100 d-flex flex-column">
-                <h2 class="h5 text-capitalize">{{ plan.name }}</h2>
-                {% if plan.features_parsed.headline %}
-                <p class="text-muted small">{{ plan.features_parsed.headline }}</p>
+        <div class="col-md-6 col-lg-3">
+            <article class="dashboard-panel plan-card h-100 d-flex flex-column">
+                {% if plan.features_parsed.badge %}
+                <span class="plan-badge">{{ plan.features_parsed.badge }}</span>
                 {% endif %}
-                <p class="display-6 fw-semibold mb-3">
+                <h2 class="h5 text-capitalize mb-1">{{ plan.name }}</h2>
+                {% if plan.features_parsed.headline %}
+                <p class="text-muted small mb-2">{{ plan.features_parsed.headline }}</p>
+                {% endif %}
+                <p class="display-6 fw-semibold mb-1">
                     {% if plan.price and plan.price > 0 %}
                         {{ tenant.billing_currency or 'PHP' }} {{ plan.price | round | int }}<span class="fs-6 fw-normal text-muted">/mo</span>
                     {% else %}
                         <span class="fs-4">Free</span>
                     {% endif %}
                 </p>
+                {% if plan.features_parsed.compare_note %}
+                <p class="plan-compare">{{ plan.features_parsed.compare_note }}</p>
+                {% endif %}
                 <ul class="small text-muted ps-3 mb-4 flex-grow-1">
-                    {% if plan.name|lower == 'demo' %}
-                    <li>Limited products &amp; sales per month</li>
-                    <li>Full UI to evaluate features</li>
-                    {% elif plan.name|lower == 'starter' %}
-                    <li>Single location POS &amp; inventory</li>
-                    <li>Owner reporting &amp; backups</li>
-                    {% elif plan.name|lower == 'growth' %}
-                    <li>Everything in Starter</li>
-                    <li>Stronger reporting &amp; team workflows</li>
+                    {% if plan.features_parsed.bullets %}
+                        {% for item in plan.features_parsed.bullets %}
+                        <li>{{ item }}</li>
+                        {% endfor %}
+                    {% elif plan.name|lower == 'demo' %}
+                        <li>Limited products &amp; sales per month</li>
+                        <li>Full UI to evaluate features</li>
                     {% else %}
-                    <li>Multi-outlet &amp; priority support (roadmap-aligned)</li>
-                    <li>Enterprise integrations</li>
+                        <li>Core POS &amp; inventory included</li>
                     {% endif %}
                 </ul>
-                {% if plan.name|lower == tenant.plan_name|lower %}
+                {% if plan.name|lower == tenant.plan_name|lower and tenant.subscription_status != 'pending' %}
                 <button type="button" class="btn btn-secondary w-100" disabled>Current plan</button>
+                {% elif tenant.subscription_status == 'pending' and plan.name|lower == tenant.pending_plan_name|lower %}
+                <button type="button" class="btn btn-outline-secondary w-100" disabled>Pending approval</button>
+                {% elif tenant.subscription_status == 'pending' %}
+                <form method="post" action="{{ url_for('subscription_select_plan') }}">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="plan_id" value="{{ plan.id }}">
+                    <button type="submit" class="btn btn-outline-primary w-100">Change request</button>
+                </form>
                 {% elif plan.name|lower == 'demo' %}
                 <button type="button" class="btn btn-outline-secondary w-100" disabled>Included with signup</button>
                 {% else %}
@@ -87,6 +145,11 @@
         </div>
         {% endfor %}
     </div>
+
+    <p class="small text-muted mt-4 mb-0">
+        Prices are per workspace unless noted. Competitor references are public list prices as of 2026 and may vary by contract, hardware bundle, or promotions.
+        Need a custom rollout for a franchise? Contact platform admin after signup.
+    </p>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>

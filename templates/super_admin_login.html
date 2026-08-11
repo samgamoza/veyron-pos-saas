@@ -8,11 +8,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    {% include 'partials/brand_tokens.html' %}
 </head>
 <body class="admin-body auth-body">
     <main class="login-shell login-shell-modern">
         <section class="auth-split-card">
             <aside class="auth-hero-panel">
+                <img src="{{ url_for('static', filename='public/logo-mark.png') }}?v=6" alt="{{ business_name }} logo" class="login-logo" width="1001" height="1001">
                 <p class="eyebrow">Dedicated Portal</p>
                 <h1 class="login-title">Super Admin Access</h1>
                 <p class="hero-text">This secure portal is reserved for platform-level operations across all tenants.</p>

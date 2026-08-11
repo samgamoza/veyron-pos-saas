@@ -144,6 +144,9 @@ class TenantService:
         )
 
         self._create_default_settings(tenant.id)
+        from app.modules.web import queries as web_queries
+
+        web_queries.ensure_tenant_units(self.connection, int(tenant.id))
         # Every tenant starts with one default branch.
         from app.core.locations import LocationService
 

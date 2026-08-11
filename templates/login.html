@@ -6,15 +6,15 @@
     <title>{{ business_name }} Login</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}?v=6">
     {% include 'partials/brand_tokens.html' %}
 </head>
 <body class="admin-body auth-body">
     <main class="login-shell login-shell-modern">
         <section class="auth-split-card">
             <aside class="auth-hero-panel">
-                <img src="{{ url_for('static', filename=logo_path) }}" alt="{{ business_name }} logo" class="brand-logo login-logo">
+                <img src="{{ url_for('static', filename='public/logo-mark.png') }}?v=6" alt="{{ business_name }} logo" class="login-logo" width="1024" height="1024">
                 <p class="eyebrow">Enterprise POS</p>
                 <h1 class="login-title">{{ business_name }}</h1>
                 <p class="hero-text">Sell faster. Know your numbers. Role-based access for cashiers, admins, and owners.</p>
@@ -29,7 +29,7 @@
             <section class="login-card auth-form-panel">
                 <p class="eyebrow">Welcome back</p>
                 <h2 class="mb-2">Sign in to continue</h2>
-                <p class="panel-note mb-3">Use your assigned username and PIN.</p>
+                <p class="panel-note mb-3">Enter the username and PIN issued for your store.</p>
 
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
@@ -46,7 +46,7 @@
                     <input type="hidden" name="next" value="{{ next }}">
                     <label>
                         Username
-                        <input type="text" name="username" placeholder="username" autocomplete="username" required>
+                        <input type="text" name="username" placeholder="Your username" autocomplete="username" required autofocus>
                     </label>
                     <label>
                         PIN
@@ -60,8 +60,10 @@
                     <button type="submit" class="primary-button w-100">Sign in</button>
                 </form>
 
+                {% if show_demo_accounts %}
                 <details class="auth-demo-details">
-                    <summary>Demo accounts</summary>
+                    <summary>Local demo accounts</summary>
+                    <p class="panel-note mt-2 mb-2">Visible only outside production. Do not use these credentials on live systems.</p>
                     <div class="login-hint-grid">
                         <article class="metric-card">
                             <span>Owner</span>
@@ -80,11 +82,19 @@
                         </article>
                     </div>
                 </details>
+                {% endif %}
 
-                <div class="auth-secondary-links">
-                    <a href="{{ url_for('signup') }}" class="primary-button">Create new tenant</a>
-                    <a href="{{ url_for('superadmin_login') }}" class="ghost-link">Super Admin</a>
-                </div>
+                <footer class="auth-footer">
+                    {% if allow_public_signup %}
+                    <p class="auth-footer-cta">
+                        New to {{ business_name }}?
+                        <a href="{{ url_for('signup') }}">Create a workspace</a>
+                    </p>
+                    {% endif %}
+                    <p class="auth-footer-meta">
+                        <a href="{{ url_for('superadmin_login') }}">Platform admin</a>
+                    </p>
+                </footer>
             </section>
         </section>
     </main>

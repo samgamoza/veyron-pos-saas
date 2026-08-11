@@ -23,7 +23,7 @@
 <div class="page-wrap">
     <header class="site-header">
         <div class="header-brand">
-            <img src="{{ url_for('static', filename=logo_path) }}" alt="{{ business_name }} logo" class="brand-logo">
+            <img src="{{ url_for('static', filename=logo_mark_path) }}" alt="{{ business_name }} logo" class="brand-logo">
             <div>
                 <p class="eyebrow">Admin</p>
                 <h1>{{ business_name }}</h1>
@@ -35,7 +35,7 @@
                 <a href="{{ url_for('owner_dashboard') }}" class="ghost-link">Owner</a>
             {% endif %}
             <a href="{{ url_for('inventory_dashboard') }}" class="ghost-link">Inventory</a>
-            <a href="{{ url_for('admin_marketplace_orders') }}" class="ghost-link">eTown orders</a>
+            <a href="{{ url_for('admin_marketplace_orders') }}" class="ghost-link">Online orders</a>
             <a href="{{ url_for('pos') }}" class="pos-launch-link ghost-link">POS</a>
             <span class="system-pill">{{ current_user.full_name }}</span>
             <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>

@@ -860,6 +860,7 @@ def register_admin_routes(app: Flask, *, product_service: ProductService) -> Non
             order_list = [dict(row) for row in orders]
             oids = [o["id"] for o in order_list]
             items_by_order: dict[int, list[dict]] = {}
+            delivery_by_order: dict[int, dict] = {}
             if oids:
                 placeholders = ",".join("?" * len(oids))
                 item_rows = connection.execute(
@@ -878,10 +879,21 @@ def register_admin_routes(app: Flask, *, product_service: ProductService) -> Non
                 for ir in item_rows:
                     oid = int(ir["order_id"])
                     items_by_order.setdefault(oid, []).append(dict(ir))
+                delivery_rows = connection.execute(
+                    f"""
+                    SELECT order_id, status, delivery_fee, address, rider_id
+                    FROM delivery_orders
+                    WHERE tenant_id = ? AND reference_type = 'online_order' AND order_id IN ({placeholders})
+                    """,
+                    (tenant_id, *oids),
+                ).fetchall()
+                for dr in delivery_rows:
+                    delivery_by_order[int(dr["order_id"])] = dict(dr)
         return render_template(
             "admin_marketplace_orders.html",
             orders=order_list,
             items_by_order=items_by_order,
+            delivery_by_order=delivery_by_order,
         )
 
 

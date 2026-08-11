@@ -14,9 +14,10 @@
     </style>
 </head>
 <body>
+    <p><a href="{{ url_for('superadmin.super_admin_dashboard') }}">← Back to control center</a></p>
     <h1>Global Product Admin</h1>
     <div class="toolbar">
-        <form method="get" action="">
+        <form method="get" action="{{ url_for('product_admin.index') }}">
             <label for="tenant_id">Tenant:</label>
             <select name="tenant_id" id="tenant_id">
                 <option value="">All tenants</option>

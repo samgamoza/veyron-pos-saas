@@ -1,4 +1,5 @@
 {# Tenant brand → CSS tokens used by style.css + admin_ui.css #}
+<link rel="icon" type="image/png" href="{{ url_for('static', filename=logo_mark_path|default('public/logo-mark.png')) }}">
 <style>
   :root {
     --accent: {{ brand_primary|default('#0f6a5d') }};

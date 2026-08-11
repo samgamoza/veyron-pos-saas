@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    {% include 'partials/brand_tokens.html' %}
     <style>
         :root{--accent:#2d3e50;--accent-strong:#1a232e;--warning:#b54a2f;}
         .saas-hero{background:linear-gradient(135deg,rgba(45,62,80,.08),rgba(181,74,47,.06));border:1px solid rgba(45,62,80,.12);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}
@@ -72,7 +73,7 @@
 <div class="page-wrap">
     <header class="site-header">
         <div class="header-brand">
-            <img src="{{ url_for('static', filename=logo_path) }}" alt="Veyron POS logo" class="brand-logo">
+            <img src="{{ url_for('static', filename=logo_mark_path) }}" alt="Veyron POS logo" class="brand-logo">
             <div>
                 <p class="eyebrow">Super Admin</p>
                 <h1>Multi-tenant SaaS control center</h1>
@@ -132,8 +133,15 @@
                     <article class="metric-card warning">
                         <span>Open risk signals</span>
                         <strong>{{ metrics.pending_issues_count }}</strong>
-                        <span class="small text-muted d-block mt-1">Trials ending, overdue subs/invoices, stuck delivery</span>
+                        <span class="small text-muted d-block mt-1">Pending upgrades, trials ending, overdue subs/invoices, stuck delivery</span>
                     </article>
+                    {% if metrics.pending_plan_upgrades_count %}
+                    <article class="metric-card warning">
+                        <span>Pending plan upgrades</span>
+                        <strong>{{ metrics.pending_plan_upgrades_count }}</strong>
+                        <span class="small text-muted d-block mt-1"><a href="#health">Review in Health &amp; risk</a></span>
+                    </article>
+                    {% endif %}
                 </div>
                 <div class="metrics-grid" style="margin-top:.75rem;">
                     <article class="metric-card">
@@ -253,6 +261,8 @@
                     </select>
                     <select name="subscription_status">
                         <option value="trial">Trial</option>
+                        <option value="demo">Demo</option>
+                        <option value="pending">Pending approval</option>
                         <option value="active">Active</option>
                         <option value="overdue">Overdue</option>
                         <option value="cancelled">Cancelled</option>
@@ -307,6 +317,7 @@
                                             data-storefront-enabled="{{ tenant.storefront_enabled }}"
                                             data-auto-storefront-enabled="{{ tenant.auto_storefront_enabled }}"
                                             data-storefront-url="{{ tenant.storefront_url }}"
+                                            data-qr-ordering-override="{{ tenant.qr_ordering_override or '' }}"
                                             data-parent-tenant-id="{{ tenant.parent_tenant_id or '' }}"
                                             data-org-slug="{{ tenant.org_slug or '' }}"
                                             data-outlet-code="{{ tenant.outlet_code or '' }}"
@@ -372,13 +383,13 @@
                 <h3 class="h6 text-muted">Recent delivery orders (<code>delivery_orders</code>)</h3>
                 <div class="table-shell admin-table-wrap compact-table">
                     <table class="table">
-                        <thead><tr><th>ID</th><th>Tenant</th><th>Sale</th><th>Status</th><th>Fee</th><th>Address</th><th>Created</th></tr></thead>
+                        <thead><tr><th>ID</th><th>Tenant</th><th>Ref</th><th>Status</th><th>Fee</th><th>Address</th><th>Created</th></tr></thead>
                         <tbody>
                             {% for d in delivery_orders_recent %}
                                 <tr>
                                     <td>{{ d.id }}</td>
                                     <td>{{ d.tenant_name }}</td>
-                                    <td>#{{ d.order_id }}</td>
+                                    <td>{% if d.reference_type == 'online_order' %}Online #{% else %}Sale #{% endif %}{{ d.order_id }}</td>
                                     <td><span class="status-chip">{{ d.status }}</span></td>
                                     <td>{{ d.delivery_fee|php }}</td>
                                     <td class="small">{% set addr = d.address or '' %}{{ addr[:48] }}{% if addr|length > 48 %}…{% endif %}</td>
@@ -397,8 +408,41 @@
                     <div>
                         <p class="eyebrow">Revenue &amp; operations</p>
                         <h2>Tenant health &amp; risk</h2>
-                        <p class="text-muted small mb-0">Trials ending within 7 days, overdue invoices, subscription-overdue tenants, and delivery rows that need attention.</p>
+                        <p class="text-muted small mb-0">Pending plan upgrades, trials ending within 7 days, overdue invoices, subscription-overdue tenants, and delivery rows that need attention.</p>
                     </div>
+                </div>
+                <h3 class="h6 text-muted mt-2">Pending plan upgrades</h3>
+                <div class="table-shell admin-table-wrap compact-table mb-4">
+                    <table class="table">
+                        <thead><tr><th>Tenant</th><th>Current</th><th>Requested</th><th>Fee</th><th>Requested</th><th>Contact</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            {% for row in pending_plan_upgrades %}
+                                <tr>
+                                    <td>{{ row.name }} <span class="text-muted small">#{{ row.id }}</span></td>
+                                    <td>{{ row.plan_name|title }}</td>
+                                    <td><strong>{{ row.pending_plan_name|title }}</strong></td>
+                                    <td>{{ row.pending_plan_fee|php }} {{ row.billing_currency or 'PHP' }}</td>
+                                    <td class="small">{{ row.plan_upgrade_requested_at or '—' }}</td>
+                                    <td class="small">{{ row.contact_email or '—' }}</td>
+                                    <td class="d-flex flex-wrap gap-1">
+                                        <form method="post" action="{{ url_for('superadmin.approve_tenant_upgrade') }}">
+                                            {{ csrf_field() }}
+                                            <input type="hidden" name="tenant_id" value="{{ row.id }}">
+                                            <button type="submit" class="primary-button small-action">Approve</button>
+                                        </form>
+                                        <form method="post" action="{{ url_for('superadmin.reject_tenant_upgrade') }}" class="d-inline-flex gap-1 align-items-center">
+                                            {{ csrf_field() }}
+                                            <input type="hidden" name="tenant_id" value="{{ row.id }}">
+                                            <input type="text" name="reason" placeholder="Optional note" class="form-control form-control-sm" style="max-width:9rem;">
+                                            <button type="submit" class="ghost-link small-action danger-action">Reject</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="7">No pending plan upgrade requests.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
                 <h3 class="h6 text-muted mt-2">Trials ending soon</h3>
                 <div class="table-shell admin-table-wrap compact-table mb-4">
@@ -758,7 +802,7 @@
                             <label>Tenant name<input type="text" name="tenant_name" id="edit-tenant-name" required autocomplete="organization"></label>
                             <label>Status<select name="is_active" id="edit-tenant-status"><option value="1">Active</option><option value="0">Inactive</option></select></label>
                             <label>Plan<select name="plan_name" id="edit-plan-name"><option value="starter">Starter</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></label>
-                            <label>Subscription<select name="subscription_status" id="edit-subscription-status"><option value="trial">Trial</option><option value="active">Active</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option></select></label>
+                            <label>Subscription<select name="subscription_status" id="edit-subscription-status"><option value="trial">Trial</option><option value="demo">Demo</option><option value="pending">Pending approval</option><option value="active">Active</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option></select></label>
                             <label>Monthly fee<input type="number" step="0.01" min="0" name="monthly_fee" id="edit-monthly-fee" placeholder="0.00"></label>
                         </div>
                     </fieldset>
@@ -833,6 +877,13 @@
                             <label><input type="checkbox" name="storefront_enabled" id="edit-storefront-enabled" value="1"> Storefront enabled</label>
                             <label><input type="checkbox" name="auto_storefront_enabled" id="edit-auto-storefront-enabled" value="1"> Auto-post tenant products</label>
                         </div>
+                        <label>QR ordering override
+                            <select name="qr_ordering_override" id="edit-qr-ordering-override">
+                                <option value="">Default (follow plan)</option>
+                                <option value="force_on">Force on (bypass plan lock / demo cap)</option>
+                                <option value="force_off">Force off</option>
+                            </select>
+                        </label>
                     </fieldset>
                     <fieldset>
                         <legend>Delivery integration</legend>
@@ -976,6 +1027,8 @@
                 document.getElementById('edit-storefront-enabled').checked = button.dataset.storefrontEnabled === '1';
                 document.getElementById('edit-auto-storefront-enabled').checked = button.dataset.autoStorefrontEnabled === '1';
                 document.getElementById('edit-storefront-url').value = button.dataset.storefrontUrl || '';
+                const qrOverride = document.getElementById('edit-qr-ordering-override');
+                if (qrOverride) qrOverride.value = button.dataset.qrOrderingOverride || '';
                 const parentSel = document.getElementById('edit-parent-tenant-id');
                 const tid = String(button.dataset.tenantId || '');
                 if (parentSel) {

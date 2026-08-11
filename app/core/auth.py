@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from functools import wraps
 from typing import Any
+from urllib.parse import urlparse
 
 from flask import flash, redirect, request, session, url_for
 
@@ -12,6 +13,18 @@ from app.core.user_service import user_service
 from app.modules.users.permissions import resolve_roles
 
 REAUTH_TTL_SECONDS = 600
+
+
+def safe_local_redirect(target: str | None, fallback: str) -> str:
+    """Allow only same-site relative paths for post-login ``next`` redirects."""
+    if not target:
+        return fallback
+    parsed = urlparse(target)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not target.startswith("/"):
+        return fallback
+    return target
 
 
 def post_login_redirect_for_user(user: dict[str, object]) -> str:

@@ -50,7 +50,7 @@ def register_pos_routes(app: Flask, *, storefront_service: StorefrontService) ->
             if tid:
                 prow = conn.execute("SELECT pos_profile FROM tenants WHERE id = ?", (tid,)).fetchone()
                 if prow is not None:
-                    pos_profile_meta = get_profile(prow.get("pos_profile"))
+                    pos_profile_meta = get_profile(prow["pos_profile"])
         store_display_name = g.tenant.name if g.tenant is not None else BUSINESS_NAME
         pos_display_channel = f"veyron_pos_dual_t{session.get('tenant_id') or 0}_u{session.get('user_id') or 0}"
         return render_template(
@@ -257,7 +257,7 @@ def register_pos_routes(app: Flask, *, storefront_service: StorefrontService) ->
                     (int(tenant_id_check),),
                 ).fetchone()
                 if tp_row is not None:
-                    tenant_pos_profile = normalize_pos_profile_id(tp_row.get("pos_profile"))
+                    tenant_pos_profile = normalize_pos_profile_id(tp_row["pos_profile"])
                 try:
                     assert_demo_allows_checkout(connection, int(tenant_id_check))
                 except ValueError as exc:

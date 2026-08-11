@@ -86,6 +86,14 @@ def register_subscription_pages_routes(app: Flask) -> None:
             return redirect(url_for("login"))
 
         with get_connection() as connection:
+            tenant_row = connection.execute(
+                """
+                SELECT id, name, plan_name, monthly_fee, subscription_status, billing_currency,
+                       pending_plan_name, pending_plan_fee, plan_upgrade_requested_at
+                FROM tenants WHERE id = ?
+                """,
+                (tenant_id,),
+            ).fetchone()
             plan_rows = connection.execute(
                 """
                 SELECT id, name, price, features, is_active
@@ -94,13 +102,6 @@ def register_subscription_pages_routes(app: Flask) -> None:
                 ORDER BY price ASC, name ASC
                 """
             ).fetchall()
-            tenant_row = connection.execute(
-                """
-                SELECT id, name, plan_name, monthly_fee, subscription_status, billing_currency
-                FROM tenants WHERE id = ?
-                """,
-                (tenant_id,),
-            ).fetchone()
 
         plans_out: list[dict[str, object]] = []
         for r in plan_rows:
@@ -128,48 +129,30 @@ def register_subscription_pages_routes(app: Flask) -> None:
         if not tenant_id:
             return redirect(url_for("login"))
 
-        from app.core.subscription.service import SubscriptionService
+        from app.core.subscription.upgrade_workflow import request_plan_upgrade
 
         with get_connection() as connection:
-            plan = connection.execute(
-                "SELECT id, name, price FROM plans WHERE id = ? AND is_active = 1",
-                (plan_id,),
-            ).fetchone()
-            if plan is None:
-                flash("That plan is not available.", "error")
+            try:
+                result = request_plan_upgrade(connection, int(tenant_id), plan_id)
+            except ValueError as exc:
+                flash(str(exc), "error" if "not available" in str(exc).lower() else "info")
                 return redirect(url_for("subscription_plans"))
-            if str(plan["name"]).strip().lower() == DEMO_PLAN_NAME:
-                flash("You are already on the free demo. Choose a paid plan to unlock full limits.", "info")
-                return redirect(url_for("subscription_plans"))
-
-            pname = str(plan["name"]).strip()
-            price = float(plan["price"] or 0)
-            connection.execute(
-                """
-                UPDATE tenants
-                SET plan_name = ?, monthly_fee = ?, subscription_status = 'active'
-                WHERE id = ?
-                """,
-                (pname, price, tenant_id),
-            )
-            sub = SubscriptionService(connection)
-            existing = sub.get_subscription_by_tenant(int(tenant_id))
-            if existing is None:
-                sub.create_subscription(int(tenant_id), int(plan["id"]), trial_days=None)
-            else:
-                sub.upgrade_subscription(int(tenant_id), int(plan["id"]))
 
             web_queries.log_audit(
                 connection,
                 "plan_selected",
                 "tenant",
                 int(tenant_id),
-                f"Owner selected plan '{pname}' at monthly fee {price}.",
+                (
+                    f"Owner requested upgrade to '{result['requested_plan']}' "
+                    f"at {result['billing_currency']} {result['requested_fee']} (pending approval)."
+                ),
+                tenant_id=int(tenant_id),
             )
 
         flash(
-            "Your workspace is now on the selected plan with full platform limits. "
-            "Configure how you collect subscription fees (bank transfer, e-wallet, PayPal, etc.) under Owner settings when you go live.",
+            "Upgrade request submitted. Your current plan stays active until platform admin confirms payment "
+            "and approves the change. You'll see a notification on your owner dashboard when it's processed.",
             "success",
         )
         return redirect(url_for("owner_dashboard"))

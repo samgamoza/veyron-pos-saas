@@ -37,6 +37,17 @@
         <div class="ref">Reference #{{ order.id }}</div>
         <div class="total">Total: ₱{{ "%.2f"|format(order.total) }}</div>
         {% if table %}<p>Table {{ table }}</p>{% endif %}
+        {% if order.delivery_line1 %}
+            <p class="small" style="color:#374151;margin:.5rem 0;">
+                Deliver to: {{ order.delivery_line1 }}{% if order.delivery_city %}, {{ order.delivery_city }}{% endif %}
+            </p>
+        {% endif %}
+        {% if delivery %}
+            <span class="badge awaiting">Rider delivery · {{ delivery.status|replace('_', ' ') }}</span>
+            {% if delivery.delivery_fee and delivery.delivery_fee > 0 %}
+                <p class="small">Delivery fee: ₱{{ '%.2f'|format(delivery.delivery_fee) }}</p>
+            {% endif %}
+        {% endif %}
 
         {% if order.payment_status == 'paid' %}
             <span class="badge paid">Paid ✓</span>

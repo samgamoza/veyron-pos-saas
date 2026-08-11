@@ -31,15 +31,18 @@ class ScanToOrderTest(unittest.TestCase):
         cls.app.config["TESTING"] = True
         cls.app.config["WTF_CSRF_ENABLED"] = False
         with get_raw_connection() as conn:
-            # Tenant 1 is deliberately NOT marketplace-enabled — QR ordering must still work.
-            conn.execute("UPDATE tenants SET marketplace_enabled = 0 WHERE id = 1")
+            conn.execute("UPDATE tenants SET marketplace_enabled = 0, plan_name = 'growth' WHERE id = 1")
             _set_setting(conn, 1, "qr_ordering_enabled", "1")
             prow = conn.execute(
-                """
-                INSERT INTO products (tenant_id,name,sku,price,stock,reorder_level,cost,status,sort_order,is_public)
-                VALUES (1,'QR Latte','QR-SKU-1',80,100,1,20,'active',0,1) RETURNING id
-                """
+                "SELECT id FROM products WHERE tenant_id = 1 AND sku = 'QR-SKU-1' LIMIT 1"
             ).fetchone()
+            if prow is None:
+                prow = conn.execute(
+                    """
+                    INSERT INTO products (tenant_id,name,sku,price,stock,reorder_level,cost,status,sort_order,is_public)
+                    VALUES (1,'QR Latte','QR-SKU-1',80,100,1,20,'active',0,1) RETURNING id
+                    """
+                ).fetchone()
             cls.product_id = int(prow["id"])
 
     def test_order_page_renders_for_non_marketplace_merchant(self) -> None:
@@ -48,6 +51,18 @@ class ScanToOrderTest(unittest.TestCase):
         html = res.get_data(as_text=True)
         self.assertIn("QR Latte", html)
         self.assertIn("Place order", html)
+
+    def test_order_page_shows_delivery_option_when_enabled(self) -> None:
+        with get_raw_connection() as conn:
+            conn.execute("UPDATE tenants SET delivery_enabled = 1 WHERE id = 1")
+        try:
+            res = self.app.test_client().get("/order/1")
+            self.assertEqual(res.status_code, 200)
+            html = res.get_data(as_text=True)
+            self.assertIn("Deliver to me", html)
+        finally:
+            with get_raw_connection() as conn:
+                conn.execute("UPDATE tenants SET delivery_enabled = 0 WHERE id = 1")
 
     def test_order_page_carries_table_context(self) -> None:
         res = self.app.test_client().get("/order/1?table=7")
@@ -82,6 +97,47 @@ class ScanToOrderTest(unittest.TestCase):
         self.assertIn("Table 12", confirm_html)
         self.assertIn("160.00", confirm_html)
 
+    def test_delivery_order_creates_rider_dispatch_row(self) -> None:
+        with get_raw_connection() as conn:
+            conn.execute("UPDATE tenants SET delivery_enabled = 1 WHERE id = 1")
+            _set_setting(conn, 1, "delivery_fee_base", "50")
+        try:
+            res = self.app.test_client().post(
+                "/order/1",
+                data={
+                    "guest_name": "Delivery Customer",
+                    "guest_phone": "09171112222",
+                    "fulfillment": "delivery",
+                    "delivery_line1": "123 Main St",
+                    "delivery_city": "Quezon City",
+                    "delivery_notes": "Call on arrival",
+                    f"qty_{self.product_id}": "1",
+                },
+            )
+            self.assertEqual(res.status_code, 302, res.get_data(as_text=True))
+            with get_raw_connection() as conn:
+                order = conn.execute(
+                    "SELECT id, delivery_line1, delivery_city FROM orders WHERE tenant_id = 1 ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+                self.assertEqual(order["delivery_line1"], "123 Main St")
+                self.assertEqual(order["delivery_city"], "Quezon City")
+                delivery = conn.execute(
+                    """
+                    SELECT status, reference_type, address, instructions
+                    FROM delivery_orders
+                    WHERE tenant_id = 1 AND order_id = ? AND reference_type = 'online_order'
+                    """,
+                    (int(order["id"]),),
+                ).fetchone()
+            self.assertIsNotNone(delivery)
+            self.assertEqual(delivery["status"], "pending")
+            self.assertEqual(delivery["reference_type"], "online_order")
+            self.assertIn("123 Main St", delivery["address"])
+            self.assertIn("Call on arrival", delivery["instructions"])
+        finally:
+            with get_raw_connection() as conn:
+                conn.execute("UPDATE tenants SET delivery_enabled = 0 WHERE id = 1")
+
     def test_order_page_404_when_disabled(self) -> None:
         with get_raw_connection() as conn:
             _set_setting(conn, 1, "qr_ordering_enabled", "0")
@@ -105,6 +161,7 @@ class OwnerQrTest(unittest.TestCase):
         with get_raw_connection() as conn:
             u = conn.execute("SELECT id FROM users WHERE tenant_id=1 AND role='owner' LIMIT 1").fetchone()
             cls.user_id = int(u["id"]) if u else None
+            conn.execute("UPDATE tenants SET plan_name = 'growth' WHERE id = 1")
 
     def test_qr_svg_helper_encodes_data(self) -> None:
         svg = render_qr_svg("https://example.com/order/1")

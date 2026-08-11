@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_ui.css') }}">
+    {% include 'partials/brand_tokens.html' %}
     <style>
         :root{--accent:#2d3e50;--accent-strong:#1a232e;}
         .gw-card{border:1px solid rgba(45,62,80,.15);border-radius:12px;padding:1rem 1.1rem;background:rgba(255,255,255,.65);margin-bottom:.85rem;}
@@ -23,10 +24,13 @@
 <body class="admin-body">
 <div class="page-wrap" style="max-width:48rem;margin:0 auto;padding:1.5rem 1rem 3rem;">
     <header class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-        <div>
+        <div class="d-flex align-items-start gap-3">
+            <img src="{{ url_for('static', filename=logo_mark_path) }}" alt="" class="brand-logo">
+            <div>
             <p class="eyebrow mb-1">Super Admin</p>
             <h1 class="h3 mb-2">Payment gateways</h1>
             <p class="text-muted small mb-0">Turn gateways on or off for the whole platform. Tenants can only connect adapters that are both <strong>enabled here</strong> and <strong>implemented in code</strong>.</p>
+            </div>
         </div>
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>

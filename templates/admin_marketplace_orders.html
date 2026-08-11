@@ -14,16 +14,18 @@
 <div class="page-wrap">
     <header class="site-header">
         <div class="header-brand">
-            <img src="{{ url_for('static', filename=logo_path) }}" alt="" class="brand-logo">
+            <img src="{{ url_for('static', filename=logo_mark_path) }}" alt="" class="brand-logo">
             <div>
                 <p class="eyebrow">Marketplace</p>
-                <h1 class="h4 mb-0">eTown orders</h1>
-                <p class="text-muted small mb-0">Read-only — online customer orders (not POS sales).</p>
+                <h1 class="h4 mb-0">Online orders</h1>
+                <p class="text-muted small mb-0">Read-only — QR and marketplace customer orders (not POS sales).</p>
             </div>
         </div>
         <nav class="header-nav">
             <a href="{{ url_for('admin_dashboard') }}" class="ghost-link">Admin</a>
             <a href="{{ url_for('pos') }}" class="ghost-link">POS</a>
+            <a href="{{ url_for('inventory_dashboard') }}" class="ghost-link">Inventory</a>
+            <a href="{{ url_for('admin_marketplace_orders') }}" class="ghost-link">Online orders</a>
             <a href="{{ url_for('logout') }}" class="ghost-link">Logout</a>
         </nav>
     </header>
@@ -31,16 +33,27 @@
         {% if orders %}
             {% for o in orders %}
             <article class="card mb-3 shadow-sm">
-                <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+                <div class="card-header d-flex flex-wrap justify-content-between gap-2 align-items-center">
                     <strong>Order #{{ o.id }}</strong>
-                    <span class="badge bg-secondary">{{ o.status }}</span>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge bg-secondary">{{ o.status }}</span>
+                        {% set delivery = delivery_by_order.get(o.id) %}
+                        {% if delivery %}
+                            <span class="badge bg-info text-dark">Rider · {{ delivery.status }}</span>
+                        {% elif o.delivery_line1 %}
+                            <span class="badge bg-light text-dark border">Delivery address only</span>
+                        {% endif %}
+                    </div>
                     <span class="small text-muted">{{ o.created_at }}</span>
                 </div>
                 <div class="card-body">
                     <p class="mb-1"><strong>{{ o.guest_name }}</strong> · {{ o.guest_phone }}</p>
                     <p class="small text-muted mb-2">{{ o.delivery_line1 }}{% if o.delivery_city %} · {{ o.delivery_city }}{% endif %}</p>
                     {% if o.notes %}<p class="small mb-2"><em>Customer note:</em> {{ o.notes }}</p>{% endif %}
-                    {% if o.delivery_notes %}<p class="small mb-2"><em>Delivery:</em> {{ o.delivery_notes }}</p>{% endif %}
+                    {% if delivery %}
+                        <p class="small mb-2"><strong>Rider delivery:</strong> {{ delivery.status }}{% if delivery.delivery_fee %} · fee ₱{{ '%.2f'|format(delivery.delivery_fee) }}{% endif %}</p>
+                    {% endif %}
+                    {% if o.delivery_notes %}<p class="small mb-2"><em>Delivery note:</em> {{ o.delivery_notes }}</p>{% endif %}
                     <table class="table table-sm mb-2">
                         <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Line</th></tr></thead>
                         <tbody>

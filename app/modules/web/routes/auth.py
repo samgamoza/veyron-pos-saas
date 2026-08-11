@@ -5,8 +5,9 @@ import time
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from app.core.auth import get_current_user, login_required, post_login_redirect_for_user
+from app.core.auth import get_current_user, login_required, post_login_redirect_for_user, safe_local_redirect
 from app.core.db import get_connection, get_raw_connection
+from app.core.flask_config import IS_PRODUCTION
 from app.core.rate_limit import limiter
 from app.core.db_integrity import DB_INTEGRITY_ERRORS
 from app.core.helpers import normalize_lookup_name
@@ -52,11 +53,16 @@ def register_auth_routes(app: Flask) -> None:
                         (user["id"],),
                     )
                     web_queries.log_audit(connection, "login", "user", user["id"], f"{user['username']} signed in.")
-                return redirect(next_url or post_login_redirect_for_user(dict(user)))
+                return redirect(safe_local_redirect(next_url, post_login_redirect_for_user(dict(user))))
 
             flash("Invalid username or PIN.", "error")
 
-        return render_template("login.html", next=request.args.get("next") or request.form.get("next", ""))
+        return render_template(
+            "login.html",
+            next=request.args.get("next") or request.form.get("next", ""),
+            allow_public_signup=web_queries.get_platform_setting("allow_public_signup", "1") == "1",
+            show_demo_accounts=not IS_PRODUCTION,
+        )
 
 
     @app.route("/signup", methods=["GET", "POST"])
@@ -170,7 +176,7 @@ def register_auth_routes(app: Flask) -> None:
                         (user["id"],),
                     )
                     web_queries.log_audit(connection, "login", "user", user["id"], f"{user['username']} signed in via super admin portal.")
-                return redirect(next_url or url_for("superadmin.super_admin_dashboard"))
+                return redirect(safe_local_redirect(next_url, url_for("superadmin.super_admin_dashboard")))
             flash("Invalid Super Admin credentials.", "error")
 
         return render_template("super_admin_login.html", next=next_url)
@@ -197,8 +203,8 @@ def register_auth_routes(app: Flask) -> None:
                     session["reauth_user_id"] = user["id"]
                     web_queries.log_audit(connection, "reauth", "user", db_user["id"], f"{db_user['username']} re-authenticated.")
                     if user["role"] == "super_admin":
-                        return redirect(next_url or url_for("superadmin.super_admin_dashboard"))
-                    return redirect(next_url or post_login_redirect_for_user(user))
+                        return redirect(safe_local_redirect(next_url, url_for("superadmin.super_admin_dashboard")))
+                    return redirect(safe_local_redirect(next_url, post_login_redirect_for_user(user)))
             flash("Invalid PIN. Please try again.", "error")
 
         return render_template("reauth.html", next=next_url, auth_user=user)

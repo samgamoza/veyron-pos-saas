@@ -12,6 +12,7 @@ from typing import Any
 
 from app.core.db import DATABASE_ENGINE, get_raw_connection
 from app.core.tax import compute_sale_totals, load_vat_config
+from app.core.delivery.references import REFERENCE_ONLINE_ORDER
 
 
 @dataclass
@@ -49,18 +50,25 @@ class MarketplaceOrderService:
         return dict(row) if row else None
 
     def get_orderable_tenant(self, tenant_id: int) -> dict[str, Any] | None:
-        """Tenant lookup for scan-to-order — works for ANY active merchant.
+        """Tenant lookup for scan-to-order — plan-gated with owner toggle."""
+        from app.core.subscription import entitlements as sub_entitlements
 
-        Unlike get_tenant_public this does not require marketplace opt-in; the
-        merchant's own QR ordering page is gated only by being active and having
-        the ``qr_ordering_enabled`` setting on (default on).
-        """
         with get_raw_connection() as connection:
             row = connection.execute(
-                "SELECT id, name, subdomain FROM tenants WHERE id = ? AND is_active = 1",
+                """
+                SELECT id, name, subdomain, plan_name, qr_ordering_override
+                FROM tenants WHERE id = ? AND is_active = 1
+                """,
                 (tenant_id,),
             ).fetchone()
             if row is None:
+                return None
+            tenant_row = dict(row)
+            access = sub_entitlements.effective_qr_ordering_access(
+                tenant_row.get("plan_name"),
+                tenant_row.get("qr_ordering_override"),
+            )
+            if access == "locked":
                 return None
             setting = connection.execute(
                 "SELECT value FROM app_settings WHERE tenant_id = ? AND key = 'qr_ordering_enabled'",
@@ -68,14 +76,41 @@ class MarketplaceOrderService:
             ).fetchone()
         if setting is not None and str(setting["value"]).strip() == "0":
             return None
-        return dict(row)
+        return {
+            "id": tenant_row["id"],
+            "name": tenant_row["name"],
+            "subdomain": tenant_row.get("subdomain"),
+        }
+
+    def tenant_delivery_enabled(self, tenant_id: int) -> bool:
+        with get_raw_connection() as connection:
+            row = connection.execute(
+                "SELECT delivery_enabled FROM tenants WHERE id = ?",
+                (tenant_id,),
+            ).fetchone()
+        return bool(row and int(row["delivery_enabled"] or 0))
+
+    def get_online_delivery(self, tenant_id: int, order_id: int) -> dict[str, Any] | None:
+        with get_raw_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT id, status, delivery_fee, address, instructions, rider_id, created_at
+                FROM delivery_orders
+                WHERE tenant_id = ? AND order_id = ? AND reference_type = ?
+                """,
+                (tenant_id, order_id, REFERENCE_ONLINE_ORDER),
+            ).fetchone()
+        return dict(row) if row else None
 
     def get_order_public(self, tenant_id: int, order_id: int) -> dict[str, Any] | None:
         """Tenant-scoped order lookup for the customer-facing confirmation page."""
         with get_raw_connection() as connection:
             row = connection.execute(
-                "SELECT id, tenant_id, status, total, payment_status, payment_method, payment_reference "
-                "FROM orders WHERE tenant_id = ? AND id = ?",
+                """
+                SELECT id, tenant_id, status, total, payment_status, payment_method, payment_reference,
+                       delivery_line1, delivery_line2, delivery_city, delivery_notes
+                FROM orders WHERE tenant_id = ? AND id = ?
+                """,
                 (tenant_id, order_id),
             ).fetchone()
         return dict(row) if row else None
@@ -209,6 +244,12 @@ class MarketplaceOrderService:
             # eTown marketplace requires opt-in; a merchant's own QR order page does not.
             if require_marketplace and not int(tenant["marketplace_enabled"] or 0):
                 raise ValueError("This store is not on the marketplace.")
+
+            # QR scan-to-order is plan-gated; eTown marketplace orders only require marketplace opt-in.
+            if not require_marketplace:
+                from app.core.subscription import entitlements as sub_entitlements
+
+                sub_entitlements.assert_online_order_allowed(conn, tenant_id)
 
             resolved: list[dict[str, Any]] = []
             subtotal = 0.0

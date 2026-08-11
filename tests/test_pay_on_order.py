@@ -51,7 +51,7 @@ class PayOnOrderTest(unittest.TestCase):
         cls.app.config["TESTING"] = True
         cls.app.config["WTF_CSRF_ENABLED"] = False
         with get_raw_connection() as conn:
-            conn.execute("UPDATE tenants SET marketplace_enabled = 0 WHERE id = 1")
+            conn.execute("UPDATE tenants SET marketplace_enabled = 0, plan_name = 'growth' WHERE id = 1")
             conn.execute(
                 "INSERT INTO app_settings (tenant_id, key, value) VALUES (1, 'qr_ordering_enabled', '1') "
                 "ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value"

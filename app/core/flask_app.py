@@ -139,15 +139,16 @@ def create_flask_application():
                 # one tenant's context (tenant id comes from the URL). Without this,
                 # Postgres RLS fails closed and public shop pages return nothing.
                 endpoint = request.endpoint or ""
-                if endpoint.startswith("etown."):
-                    view_tenant_id = (request.view_args or {}).get("tenant_id")
-                    if view_tenant_id:
-                        public_tenant = load_tenant_by_id(connection, view_tenant_id)
-                        if public_tenant is not None:
-                            g.tenant = public_tenant
-                            g.tenant_id = public_tenant.id
-                            # Deliberately NOT persisted to session: anonymous browsing
-                            # must never bind a visitor's session to a tenant.
+                view_tenant_id = (request.view_args or {}).get("tenant_id")
+                if view_tenant_id and (
+                    endpoint.startswith("etown.") or endpoint.startswith("order.")
+                ):
+                    public_tenant = load_tenant_by_id(connection, view_tenant_id)
+                    if public_tenant is not None:
+                        g.tenant = public_tenant
+                        g.tenant_id = public_tenant.id
+                        # Deliberately NOT persisted to session: anonymous browsing
+                        # must never bind a visitor's session to a tenant.
 
 
     app.jinja_env.globals["csrf_field"] = lambda: Markup(
@@ -160,19 +161,33 @@ def create_flask_application():
 
 
     def get_logo_path() -> str:
-        custom = web_queries.get_setting("brand_logo_path", "")
+        """Resolve logo for chrome: product lockup by default; tenant custom when logged in."""
+        product = "public/logo.png" if PUBLIC_LOGO.exists() else FALLBACK_LOGO
+        tenant_id = session.get("tenant_id")
+        if not tenant_id or session.get("is_super_admin"):
+            return product
+        with get_connection() as connection:
+            row = connection.execute(
+                "SELECT value FROM app_settings WHERE tenant_id = ? AND key = ?",
+                (tenant_id, "brand_logo_path"),
+            ).fetchone()
+        custom = (row["value"] if row is not None else "") or ""
         if custom and (BASE_DIR / "static" / custom).exists():
             return custom
-        return "public/logo.png" if PUBLIC_LOGO.exists() else FALLBACK_LOGO
+        return product
 
 
     @app.context_processor
     def inject_template_globals() -> dict[str, object]:
         settings = web_queries.fetch_app_settings()
+        logo = get_logo_path()
+        mark = "public/logo-mark.png"
+        mark_path = mark if (BASE_DIR / "static" / mark).exists() else logo
         return {
             "business_name": BUSINESS_NAME,
             "currency_code": CURRENCY_CODE,
-            "logo_path": get_logo_path(),
+            "logo_path": mark_path if (BASE_DIR / "static" / mark).exists() else logo,
+            "logo_mark_path": mark_path,
             # Per-tenant VAT rate (0 when the tenant is not VAT-registered).
             "vat_rate": vat_config_from_settings(settings).rate if settings.get("vat_registered", "1") != "0" else 0.0,
             "current_user": get_current_user(),
@@ -447,6 +462,7 @@ def create_flask_application():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     tenant_id INTEGER NOT NULL,
                     order_id INTEGER NOT NULL,
+                    reference_type TEXT NOT NULL DEFAULT 'sale',
                     rider_id INTEGER,
                     address TEXT NOT NULL,
                     instructions TEXT NOT NULL DEFAULT '',
@@ -458,8 +474,7 @@ def create_flask_application():
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (tenant_id) REFERENCES tenants (id),
-                    FOREIGN KEY (rider_id) REFERENCES riders (id),
-                    FOREIGN KEY (order_id) REFERENCES sales (id)
+                    FOREIGN KEY (rider_id) REFERENCES riders (id)
                 );
 
                 CREATE TABLE IF NOT EXISTS suppliers (
@@ -687,6 +702,10 @@ def create_flask_application():
             web_queries.ensure_column(connection, "tenants", "barangay", "TEXT")
             web_queries.ensure_column(connection, "tenants", "storefront_visibility", "TEXT NOT NULL DEFAULT 'hidden'")
             web_queries.ensure_column(connection, "tenants", "updated_at", "TEXT")
+            web_queries.ensure_column(connection, "tenants", "pending_plan_name", "TEXT NOT NULL DEFAULT ''")
+            web_queries.ensure_column(connection, "tenants", "pending_plan_fee", "REAL NOT NULL DEFAULT 0")
+            web_queries.ensure_column(connection, "tenants", "plan_upgrade_requested_at", "TEXT")
+            web_queries.ensure_column(connection, "tenants", "qr_ordering_override", "TEXT NOT NULL DEFAULT ''")
             web_queries.ensure_column(connection, "products", "is_public", "INTEGER NOT NULL DEFAULT 1")
             web_queries.ensure_column(connection, "products", "marketplace_description", "TEXT")
             web_queries.ensure_column(connection, "products", "marketplace_image_path", "TEXT")
@@ -742,6 +761,7 @@ def create_flask_application():
 
             web_queries.ensure_column(connection, "units", "symbol", "TEXT NOT NULL DEFAULT ''")
             web_queries.ensure_column(connection, "units", "type", "TEXT NOT NULL DEFAULT 'count'")
+            web_queries.ensure_delivery_orders_online_support(connection)
             web_queries.ensure_column(connection, "units", "conversion", "REAL NOT NULL DEFAULT 1")
             web_queries.ensure_column(connection, "daily_inventory_shifts", "manual_opening_units", "INTEGER")
             web_queries.ensure_column(connection, "daily_inventory_shifts", "manual_closing_units", "INTEGER")
@@ -1002,25 +1022,9 @@ def create_flask_application():
 
             import json
 
-            plan_count_row = connection.execute("SELECT COUNT(*) AS c FROM plans").fetchone()
-            if plan_count_row and int(plan_count_row["c"] or 0) == 0:
-                seed_plans = (
-                    ("demo", 0.0, {"headline": "Explore the product", "limits": "capped catalog & monthly sales"}),
-                    ("starter", 49.0, {"headline": "Single location", "pos": True, "inventory": True}),
-                    ("growth", 99.0, {"headline": "Growing teams", "pos": True, "inventory": True, "reports": True}),
-                    ("enterprise", 299.0, {"headline": "Multi-outlet & priority support", "pos": True, "inventory": True}),
-                )
-                for pname, price, feats in seed_plans:
-                    connection.execute(
-                        "INSERT INTO plans (name, price, features, is_active) VALUES (?, ?, ?, 1)",
-                        (pname, price, json.dumps(feats)),
-                    )
-            demo_row = connection.execute("SELECT 1 FROM plans WHERE lower(name) = 'demo' LIMIT 1").fetchone()
-            if demo_row is None:
-                connection.execute(
-                    "INSERT INTO plans (name, price, features, is_active) VALUES (?, ?, ?, 1)",
-                    ("demo", 0.0, json.dumps({"headline": "Explore the product", "limits": "capped catalog & monthly sales"})),
-                )
+            from app.core.subscription.plans import sync_platform_plans
+
+            sync_platform_plans(connection)
 
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
@@ -1093,6 +1097,26 @@ def create_flask_application():
             return None
         return redirect(url_for("onboarding_home"))
 
+    def _public_order_error_redirect():
+        """Keep anonymous QR diners on the order flow instead of staff login."""
+        path = (request.path or "").strip("/")
+        parts = path.split("/")
+        if len(parts) >= 2 and parts[0] == "order" and parts[1].isdigit():
+            tenant_id = int(parts[1])
+            if len(parts) >= 4 and parts[2] == "confirmation" and parts[3].isdigit():
+                return redirect(
+                    url_for("order.order_confirmation", tenant_id=tenant_id, order_id=int(parts[3]))
+                )
+            if len(parts) >= 3 and parts[2].isdigit():
+                order_id = int(parts[2])
+                return redirect(
+                    url_for("order.order_confirmation", tenant_id=tenant_id, order_id=order_id)
+                )
+            return redirect(url_for("order.order_page", tenant_id=tenant_id))
+        if request.referrer:
+            return redirect(request.referrer)
+        return redirect(url_for("login"))
+
     @app.errorhandler(429)
     def rate_limit_exceeded(exc):
         if request.path.startswith("/api/"):
@@ -1101,6 +1125,8 @@ def create_flask_application():
             )
             return Response(body, status=429, mimetype="application/json; charset=utf-8")
         flash("Too many attempts. Please wait a moment and try again.", "error")
+        if (request.path or "").startswith("/order/"):
+            return _public_order_error_redirect(), 302
         return redirect(request.referrer or url_for("login")), 302
 
     @app.errorhandler(CSRFError)
@@ -1109,6 +1135,8 @@ def create_flask_application():
             body = json.dumps({"error": "csrf_failed", "message": exc.description})
             return Response(body, status=400, mimetype="application/json; charset=utf-8")
         flash("Your session expired or the form was invalid. Please try again.", "error")
+        if (request.path or "").startswith("/order/"):
+            return _public_order_error_redirect(), 302
         return redirect(request.referrer or url_for("login")), 302
 
     return app

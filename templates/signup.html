@@ -14,20 +14,21 @@
     <main class="login-shell login-shell-modern">
         <section class="auth-split-card">
             <aside class="auth-hero-panel">
+                <img src="{{ url_for('static', filename='public/logo-mark.png') }}?v=6" alt="{{ business_name }} logo" class="login-logo" width="1001" height="1001">
                 <p class="eyebrow">Start your business</p>
                 <h1 class="login-title">Create your POS workspace</h1>
-                <p class="hero-text">Start with a <strong>free demo workspace</strong> — explore POS, inventory, and storefront with safe limits, then pick a monthly plan when you are ready.</p>
+                <p class="hero-text">Start free — explore POS, inventory, and storefront with safe limits, then choose a plan when you are ready to grow.</p>
                 <div class="auth-feature-list">
-                    <div><i class="bi bi-gift"></i><span>Guided onboarding after signup</span></div>
-                    <div><i class="bi bi-shop"></i><span>Real features, demo-level caps</span></div>
-                    <div><i class="bi bi-credit-card-2-front"></i><span>Transparent plans &amp; monthly pricing</span></div>
+                    <div><i class="bi bi-gift"></i><span>Guided setup after you create a workspace</span></div>
+                    <div><i class="bi bi-shop"></i><span>Real features with starter limits</span></div>
+                    <div><i class="bi bi-credit-card-2-front"></i><span>Clear monthly plans when you upgrade</span></div>
                 </div>
             </aside>
 
             <section class="login-card auth-form-panel">
                 <p class="eyebrow">Sign up</p>
-                <h2 class="mb-2">Create account</h2>
-                <p class="panel-note mb-3">You will receive a demo tenant, then a short setup guide.</p>
+                <h2 class="mb-2">Create your workspace</h2>
+                <p class="panel-note mb-3">Set up your business account, then follow a short onboarding guide.</p>
 
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
@@ -66,7 +67,7 @@
                         Contact email
                         <input type="email" name="contact_email" placeholder="billing@yourbusiness.com" autocomplete="email">
                     </label>
-                    <button type="submit" class="primary-button w-100">Create Tenant Account</button>
+                    <button type="submit" class="primary-button w-100">Create workspace</button>
                 </form>
 
                 <div class="auth-secondary-links">

@@ -152,6 +152,9 @@ def edit_tenant() -> str:
     }
     feature_flags_json = json.dumps(feature_flags)
     pos_profile = request.form.get("pos_profile", "cafe_bakery").strip().lower() or "cafe_bakery"
+    qr_ordering_override = request.form.get("qr_ordering_override", "").strip().lower()
+    if qr_ordering_override not in ("", "force_on", "force_off"):
+        qr_ordering_override = ""
 
     try:
         admin_service.update_tenant(
@@ -184,11 +187,45 @@ def edit_tenant() -> str:
             compliance_notes=compliance_notes,
             feature_flags_json=feature_flags_json,
             pos_profile=pos_profile,
+            qr_ordering_override=qr_ordering_override,
         )
         flash("Tenant updated.", "success")
     except Exception as exc:
         flash(str(exc), "error")
     return redirect(url_for("superadmin.super_admin_dashboard"))
+
+
+@superadmin_bp.route("/tenants/approve-upgrade", methods=["POST"], endpoint="approve_tenant_upgrade")
+@super_admin_required
+@require_recent_reauth()
+def approve_tenant_upgrade() -> str:
+    tenant_id = request.form.get("tenant_id")
+    if not tenant_id:
+        flash("Tenant not found.", "error")
+        return redirect(_superadmin_dashboard_with_tab("health"))
+    try:
+        admin_service.approve_tenant_plan_upgrade(int(tenant_id))
+        flash("Plan upgrade approved and activated.", "success")
+    except Exception as exc:
+        flash(str(exc), "error")
+    return redirect(_superadmin_dashboard_with_tab("health"))
+
+
+@superadmin_bp.route("/tenants/reject-upgrade", methods=["POST"], endpoint="reject_tenant_upgrade")
+@super_admin_required
+@require_recent_reauth()
+def reject_tenant_upgrade() -> str:
+    tenant_id = request.form.get("tenant_id")
+    reason = request.form.get("reason", "").strip()
+    if not tenant_id:
+        flash("Tenant not found.", "error")
+        return redirect(_superadmin_dashboard_with_tab("health"))
+    try:
+        admin_service.reject_tenant_plan_upgrade(int(tenant_id), reason=reason)
+        flash("Plan upgrade request rejected.", "success")
+    except Exception as exc:
+        flash(str(exc), "error")
+    return redirect(_superadmin_dashboard_with_tab("health"))
 
 
 @superadmin_bp.route("/tenants/deactivate", methods=["POST"], endpoint="deactivate_tenant")

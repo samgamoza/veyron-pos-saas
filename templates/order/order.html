@@ -22,7 +22,17 @@
         .stepper button { width:34px; height:34px; border:1px solid var(--line); background:#fff; border-radius:8px; font-size:1.2rem; line-height:1; cursor:pointer; }
         .stepper input { width:44px; text-align:center; border:1px solid var(--line); border-radius:8px; height:34px; font-size:1rem; }
         .details { padding: .75rem; }
-        .details input, .details textarea { width:100%; padding:.6rem; border:1px solid var(--line); border-radius:10px; margin-top:.5rem; font-size:1rem; background:#fff; }
+        .details input, .details textarea, .details select { width:100%; padding:.6rem; border:1px solid var(--line); border-radius:10px; margin-top:.5rem; font-size:1rem; background:#fff; }
+        .fulfillment { padding: .75rem .75rem 0; }
+        .fulfillment .label { font-size:.85rem; font-weight:600; color:var(--muted); margin-bottom:.35rem; }
+        .fulfillment-options { display:flex; gap:.5rem; }
+        .fulfillment-options label { flex:1; border:1px solid var(--line); border-radius:10px; padding:.65rem; text-align:center; background:#fff; cursor:pointer; font-size:.9rem; }
+        .fulfillment-options input { display:none; }
+        .fulfillment-options input:checked + span { color:var(--brand); font-weight:700; }
+        .fulfillment-options label:has(input:checked) { border-color:var(--brand); background:#ecfdf5; }
+        .delivery-fields { display:none; padding:0 .75rem .25rem; }
+        .delivery-fields.show { display:block; }
+        .delivery-fields .hint { font-size:.8rem; color:var(--muted); margin:.25rem 0 .5rem; }
         .bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); padding:.75rem 1rem; display:flex; align-items:center; gap:.75rem; }
         .bar .total { font-weight:700; font-size:1.15rem; flex:1; }
         .bar button { background:var(--brand); color:#fff; border:none; padding:.8rem 1.2rem; border-radius:10px; font-size:1rem; font-weight:600; }
@@ -69,6 +79,31 @@
             {% endfor %}
         </div>
 
+        {% if delivery_enabled %}
+        <div class="fulfillment">
+            <div class="label">How would you like your order?</div>
+            <div class="fulfillment-options">
+                <label>
+                    <input type="radio" name="fulfillment" value="pickup" checked>
+                    <span>{% if table %}Serve at table{% else %}Pick up{% endif %}</span>
+                </label>
+                <label>
+                    <input type="radio" name="fulfillment" value="delivery">
+                    <span>Deliver to me</span>
+                </label>
+            </div>
+        </div>
+        <div class="delivery-fields" id="deliveryFields">
+            <p class="hint">Rider delivery — fee calculated at checkout.</p>
+            <input type="text" name="delivery_line1" placeholder="Street, house / building" autocomplete="street-address">
+            <input type="text" name="delivery_line2" placeholder="Barangay / landmark (optional)">
+            <input type="text" name="delivery_city" placeholder="City / municipality">
+            <textarea name="delivery_notes" rows="2" placeholder="Delivery notes (optional)"></textarea>
+        </div>
+        {% else %}
+        <input type="hidden" name="fulfillment" value="pickup">
+        {% endif %}
+
         <div class="details">
             <input type="text" name="guest_name" placeholder="Your name" required autocomplete="name">
             <input type="tel" name="guest_phone" placeholder="Mobile number" required autocomplete="tel">
@@ -110,6 +145,22 @@
             });
             qtys.forEach(function (el) { el.addEventListener('input', recompute); });
             recompute();
+
+            var deliveryFields = document.getElementById('deliveryFields');
+            var fulfillmentInputs = document.querySelectorAll('input[name="fulfillment"]');
+            function syncDeliveryFields() {
+                if (!deliveryFields) return;
+                var selected = document.querySelector('input[name="fulfillment"]:checked');
+                var isDelivery = selected && selected.value === 'delivery';
+                deliveryFields.classList.toggle('show', isDelivery);
+                deliveryFields.querySelectorAll('input, textarea').forEach(function (el) {
+                    if (el.name === 'delivery_line1' || el.name === 'delivery_city') {
+                        el.required = isDelivery;
+                    }
+                });
+            }
+            fulfillmentInputs.forEach(function (el) { el.addEventListener('change', syncDeliveryFields); });
+            syncDeliveryFields();
         })();
     </script>
 </body>
