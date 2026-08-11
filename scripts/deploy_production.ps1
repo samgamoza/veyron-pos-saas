@@ -63,20 +63,19 @@ Invoke-OrExit -Step "Uploading to Proxmox" -Block {
 }
 
 Invoke-OrExit -Step "Extracting on CT 102, rebuilding app, seeding demo tenant" -Block {
-    $remote = @"
-pct push 102 /tmp/veyron-pos-deploy.tgz /tmp/veyron-pos-deploy.tgz
-pct exec 102 -- bash -c 'set -e
-  cd /opt/veyron-pos
-  if test -f .env; then cp -a .env /tmp/veyron-pos.env.bak; fi
-  tar -xzf /tmp/veyron-pos-deploy.tgz
-  if test ! -f .env && test -f /tmp/veyron-pos.env.bak; then cp /tmp/veyron-pos.env.bak .env; fi
-  /bin/docker compose -f /opt/veyron-pos/docker-compose.yml up -d --build app
-  bash scripts/seed_via_console.sh
-  curl -fsS http://127.0.0.1:8000/healthz
-  echo
-  curl -fsS -o /dev/null -w \"order/5 HTTP %{http_code}\n\" http://127.0.0.1:8000/order/5
-'
-"@
+    # Single-line bash -lc avoids CRLF breakage when PowerShell passes multiline strings to ssh.
+    $ctScript = @(
+        "set -e"
+        "cd /opt/veyron-pos"
+        "if test -f .env; then cp -a .env /tmp/veyron-pos.env.bak; fi"
+        "tar -xzf /tmp/veyron-pos-deploy.tgz"
+        "if test ! -f .env && test -f /tmp/veyron-pos.env.bak; then cp /tmp/veyron-pos.env.bak .env; fi"
+        "/bin/docker compose -f /opt/veyron-pos/docker-compose.yml up -d --build app"
+        "bash scripts/seed_via_console.sh"
+        "curl -fsS http://127.0.0.1:8000/healthz"
+        "curl -fsS -o /dev/null -w 'order/5 HTTP %{http_code}\n' http://127.0.0.1:8000/order/5"
+    ) -join "; "
+    $remote = "pct push 102 /tmp/veyron-pos-deploy.tgz /tmp/veyron-pos-deploy.tgz && pct exec 102 -- bash -lc '$ctScript'"
     & ssh @sshBase $ProxmoxHost $remote
 }
 
